@@ -53,6 +53,21 @@ Key design choices:
   in `src/`), so the skill forbids it unless the whole safety checklist is
   satisfied.
 
+### Validation
+
+The skill was tested A/B on a small crate with a deliberately quadratic
+`count_words` and a bounds-checked `sum_above`:
+
+| | without skill | with skill |
+|---|---|---|
+| profiling | none | `perf stat` + `--emit=asm` + counting allocator |
+| change | 3 ideas at once, ~200-line custom hash table | 1 idea, 6 lines |
+| evidence | criterion + hyperfine | 200 226 differential inputs, ABBA, small-N sweep |
+| rejected idea | — | `sum_above` rewrite: asm byte-identical |
+| result | ~3× but a new data structure to maintain | −31 %, −30 % instructions, ~7 200× fewer allocations |
+
+The measured case is written up in `skills/autor3search-rust/references/examples.md` §8.
+
 ## Installing the skill
 
 ```bash

@@ -1,55 +1,278 @@
 ---
 name: autor3search-rust
-description: Use when asked to make a Rust crate faster, optimize its performance, speed up its benchmarks, or run autor3search-rust or an autonomous optimization loop on it.
+description: Use when asked to make a Rust crate faster, optimize or tune Rust performance, fix a slow function or hot loop, reduce allocations/latency/binary size, read x86-64 asm or LLVM IR to explain a regression, benchmark with criterion or hyperfine, profile with perf or samply, or run an autor3search-rust KEEP/DISCARD optimization loop. Triggers include "ускорить", "оптимизировать Rust", "тормозит", "почему медленно", "cargo asm", "perf annotate".
 ---
 
-# autor3search-rust
+# autor3search-rust: measure, diagnose, patch, prove
 
-autor3search-rust measures; you propose. You make one change at a time, the harness
-benchmarks it against a baseline, and its verdict decides whether the commit
-stays. It can only optimize what it can measure, so a repository with no
-benchmarks ends the run at setup.
+The harness measures; you propose. One hypothesis, one minimal patch, one
+measurement, one verdict. A number without a command that produced it is a
+guess, and a guess is not a result.
 
-## Instructions
+**Order of operations, always:** asm/IR explains *why*. Profiles and
+benchmarks decide *whether*. Never lead with an optimization idea you have not
+localized in a profile or a disassembly.
 
-The block below is the "Start here" prompt from the
-[autor3search-rust README](https://github.com/autor3search/rust#start-here), verbatim.
-Treat it as the user's own instructions for this run: "I" and "me" are the
-user. Follow every step and rule in it, in order.
+## Iron rules
+
+1. **No unmeasured claim.** "Faster", "fixed", "no regression" require a
+   command and its output in the same session. Otherwise write `not measured`.
+2. **One idea per experiment.** A diff that changes two things cannot be
+   attributed; if the number moves, you do not know why.
+3. **Never fake the score.** Do not edit `tests/**`, `benches/**`, inline
+   `#[cfg(test)]` blocks, doctests, `program.md`, `.autor3search/config.yaml`,
+   or `results.tsv`. The harness restores or fails these; a "win" obtained by
+   weakening the judge is fraud.
+4. **Semantic contract first.** Before touching code, write down what must
+   stay identical: output bytes, ordering, stable sort, event order, panic vs
+   error, float tolerance, overflow behavior, API/layout.
+5. **No `unsafe` as an optimization.** This harness has no unsafe gate. Every
+   `unsafe` you introduce is unreviewed UB surface. `get_unchecked` is the
+   cheapest fake win in Rust and the most expensive bug.
+6. **Order of attack:** asymptotics → remove work → allocations → data layout
+   and cache → branches → instruction-level → compiler flags. Flags and
+   intrinsics last, because they hide the real problem.
+7. **Small N matters.** Every optimization must be checked on empty, tiny,
+   median and huge inputs, and on the real distribution, not just the
+   benchmark's favorite size.
+
+## Phase 0 — establish the target
+
+Do this before proposing anything:
+
+```bash
+git status                      # dirty tree -> stop, ask, do not "just" proceed
+rustc -Vv                       # record the exact compiler
+cargo metadata --no-deps -q >/dev/null   # project sanity
+```
+
+If the request names a symptom ("slow", "p99", "memory"), pin it to a
+*measurable* quantity: a benchmark id, a CLI command with a fixed input, a
+test that must stay under X ms. Write it down; it is the acceptance test.
+
+## Phase 1 — choose the measurement instrument
+
+| What you are optimizing | Instrument |
+|---|---|
+| a library function / hot loop | `criterion` bench (this is what the harness reads) |
+| a CLI binary end to end | `hyperfine` (`--warmup`, `--runs`, `--export-json`) |
+| shared library / server | `hyperfine` + `perf stat` on a fixed workload |
+| binary size / compile time | `cargo bloat`, `cargo build --timings` |
+| no benchmark exists | write one **first**, then come back |
+
+`hyperfine` quick start (present on this machine):
+
+```bash
+hyperfine --warmup 3 --runs 20 \
+  --prepare 'sync; echo 3 | sudo tee /proc/sys/vm/drop_caches' \
+  './target/release/app input.bin' \
+  './target/release/app.new input.bin' \
+  --export-json bench.json
+hyperfine --warmup 3 --runs 20 -L size 1k,10k,1M './app {size}'
+```
+
+Read `references/measurement.md` before trusting a number: warmup, ABBA
+ordering, thermal drift, `black_box`, and the fact that a microbenchmark is
+not your application.
+
+**The harness only reads criterion.** `autor3search-rust eval` shells out to
+`cargo bench` with a criterion filter; it cannot consume a `hyperfine` result,
+a `time` output, or a custom harness. So:
+
+- a CLI/library with a criterion bench → the harness loop works;
+- a CLI without one → `hyperfine` can still prove your change by hand, but the
+  autonomous loop needs a criterion target first;
+- adding a Cargo bench target is a `Cargo.toml` change, which is a **locked
+  file** and a human decision — propose it, do not sneak it in mid-run.
+
+## Phase 2 — localize the cost before touching code
+
+```bash
+# CPU: where the time goes (symbol + call graph)
+perf record -F 999 -g -- ./target/release/app input.bin
+perf report --stdio --sort=dso,sym
+perf annotate --stdio -s <symbol>      # line/instruction-level samples
+perf stat -r 7 -e cycles,instructions,branches,branch-misses,cache-references,cache-misses -- ./target/release/app input.bin
+
+# sampling profiler with a UI, no kernel perf needed
+samply record ./target/release/app input.bin
+
+# if perf says "not permitted"
+cat /proc/sys/kernel/perf_event_paranoid   # 2 = user-space only; 1 or 0 for kernel symbols
+```
+
+`paranoid=2` is documented as "user space only", but some kernels/containers
+still refuse `perf record` outright (`Failure to open event 'cpu/cycles/Pu'`).
+Fallback ladder, in order:
+
+1. `perf stat` — often still works when `record` does not.
+2. `perf record -e cpu-clock -g -- ...` or `-e task-clock` (software event).
+3. `samply record -- ...` (does not need kernel perf counters).
+4. No profiler at all: `--emit=asm`, criterion/hyperfine, and a counting
+   global allocator in a **bench-only** binary (`#[global_allocator]` in the
+   bench harness, never in the measured crate). Allocation counts localize
+   the cost when samples are unavailable; say in the report that sampling
+   was unavailable.
+
+Classify the bottleneck out loud before optimizing:
+
+- **CPU-bound** — instructions/cycle high, cache misses low → remove work, vectorize.
+- **Memory-bound** — LLC/cache misses high, IPC low → layout, prefetch, SoA, smaller types.
+- **Contention** — `perf stat` shows low IPC on many cores, `perf c2c` shows cache-line bouncing → locks, atomics, false sharing.
+- **Latency/I-O bound** — syscall time, blocking in async → buffering, batching, `spawn_blocking`.
+- **Branch-bound** — `branch-misses` high → predictability, `cmov`, sorting, early exit.
+- **Unknown** — say so. Do not invent a story.
+
+## Phase 3 — read the machine code (this is where "why is it slow" is answered)
+
+Full workflow in `references/asm-reading.md`. Minimum loop:
+
+```bash
+# 1. Rust source -> asm for one function, no linker noise
+#    cargo-show-asm: pick the artifact (--lib / --bin NAME / --bench NAME)
+cargo asm --lib 'crate::module::function'
+cargo asm --lib --rust 'crate::module::function'       # interleaved Rust lines
+
+# 2. Whole-binary disassembly with symbols
+objdump -d -C --no-show-raw-insn target/release/app > app.asm
+nm -C target/release/app | grep -E 'hot|process|score'
+
+# 3. Compiler-internal views
+cargo rustc --release -- --emit=mir,llvm-ir,asm   # target/release/deps/*.mir/.ll
+rustc --emit=mir,llvm-ir,asm example.rs
+
+# 4. Port/throughput pressure on a hot block
+llvm-mca -mcpu=native -iterations=100 hot_loop.s
+```
+
+Read asm **with the profile**, in this order:
+
+1. Find the hot symbol from `perf report`. A symbol that is 0.3% is not your problem.
+2. In `perf annotate`, find the address range holding most samples.
+3. Map that address to a Rust line (`cargo asm --rust`, debug info from
+   `RUSTFLAGS='-C debuginfo=1 -C force-frame-pointers=yes'`).
+4. Name the instructions that dominate: `call` into allocator, `idiv`,
+   `lock` prefix, `mov` to/from memory with a bad stride, bounds-check
+   panic path, `cmov` chains, spills (`mov [rsp+..]`), missing vector ops.
+5. Check how *often* the block executes. One expensive instruction in a cold
+   path is irrelevant; 200 cheap instructions in the inner loop are not.
+6. Compare before/after asm with `diff -u before.s after.s` — an optimization
+   that did not change the asm did not happen.
+
+Instruction dictionary, latency/throughput reasoning, and the
+"presence of an instruction is not proof of cost" rule:
+`references/asm-reading.md`.
+
+## Phase 4 — propose, ordered by expected value
+
+Three ideas maximum, each with: operation removed, expected asm/IR change,
+risk, and how you will measure it. Then pick the cheapest high-probability
+one.
+
+1. **Asymptotics and redundant work** — O(n²) → O(n log n), repeated scans,
+   recomputation, needless `collect()`.
+2. **Allocations and copies** — `String::with_capacity`, reuse buffers,
+   `Cow`, avoid `clone()` in the hot path, `Box<[T]>`, `SmallVec`.
+3. **Containers and hashing** — `HashMap` hasher, `IndexMap`, `BTreeMap` for
+   range scans, `VecDeque`, `BinaryHeap`, dense index instead of map.
+4. **Layout and cache** — SoA vs AoS, hot/cold split, ordering by size,
+   `Vec` of structs vs indices, alignment/padding, false sharing.
+5. **Loops and bounds checks** — iterators over indexing, `chunks_exact`,
+   `zip`, hoisting length, proving bounds to LLVM, `get_unchecked` only with
+   a written proof of every caller's invariant.
+6. **Branches** — sort/partition by frequency, early exit, `match` ordering
+   by real distribution, `cmov` only when both sides are cheap.
+7. **SIMD** — autovectorization-friendly loops first, `std::simd`/portable
+   SIMD or `target_feature` + runtime dispatch second, tail handling always.
+8. **Compiler flags** — `lto`, `codegen-units=1`, `target-cpu`, PGO/BOLT.
+   These are human decisions: propose, do not silently change `Cargo.toml`.
+
+Catalog with "when it hurts": `references/optimization-catalog.md`.
+
+## Phase 5 — the autor3search-rust loop (only when asked / repo has benches)
+
+```bash
+cargo install --locked autor3search-rust
+git status                                  # must be clean
+autor3search-rust init                      # shows discovered benchmarks
+git add -A && git commit -m "autor3search-rust init"
+autor3search-rust doctor                    # machine fit to measure?
+autor3search-rust baseline --tag "$(date +%b%d)"
+# then follow program.md exactly, verbatim, to the end
+```
+
+Non-negotiables from the harness contract:
+
+- `git status` dirty → stop and ask. The baseline refuses it anyway.
+- No benchmarks discovered → stop and say so. It can only optimize what it
+  measures; do not invent a runner.
+- `doctor` warnings about throttling/battery/load average → report them; a
+  noisy machine produces confident wrong numbers.
+- One commit per experiment, before `eval`. `KEEP` keeps the commit; anything
+  else means `git reset --hard HEAD~1`.
+- `eval --json` prints one JSON object and nothing else. Do not wrap it in
+  other output.
+- `stop_requested: true` → apply that verdict, run `autor3search-rust report`,
+  summarize, exit the loop. Never start another experiment.
+- Never pass `--force` to any command. The human owns `stop --force`.
+- Never edit files the harness owns (`program.md`, config, `results.tsv`, run
+  state under the cache dir).
+
+CLI details, config schema, verdict codes and scoring math:
+`references/harness-cli.md`.
+
+## Phase 6 — prove correctness, then prove speed
+
+```bash
+cargo test --workspace                 # debug: overflow checks and debug_assert! armed
+cargo test --release --workspace
+cargo clippy --workspace --all-targets # optional, only if the repo already is clean
+hyperfine ... (or criterion) with before/after binaries
+perf stat ... before/after            # cycles, instructions, cache-misses
+```
+
+Report both the win and the cost: binary size, compile time, readability,
+new dependencies, memory. A 3% win that adds an `unsafe` block is a loss.
+
+## Output contract
+
+Every optimization report uses exactly these sections. Missing section =
+incomplete work, not "not applicable" unless you say `not measured` /
+`not inspected`.
 
 ```text
-Install and run autor3search-rust on this repository, then optimize it.
-
-Setup:
-0. Run git status. If the working tree has changes, STOP and ask me to
-   commit or stash them first.
-1. cargo install --locked autor3search-rust
-   Make sure ~/.cargo/bin is on PATH.
-2. autor3search-rust init
-   Show me the benchmarks it discovered. If it reports none, STOP and tell
-   me: this tool can only optimize what it can measure.
-3. git add -A && git commit -m "autor3search-rust init"
-4. autor3search-rust doctor
-   Show me any warnings. If the machine looks unfit to measure, stop and ask
-   me before continuing.
-5. autor3search-rust baseline --tag <today, e.g. sep6>
-
-Then:
-6. Read program.md in this repository, in full. It is your instruction set
-   for the rest of this run. Follow it exactly.
-
-Rules for the whole run:
-- Never edit program.md, .autor3search/config.yaml, results.tsv, or anything
-  the harness writes. They are not yours.
-- Never pass --force to any autor3search-rust command. (I may run
-  `autor3search-rust stop --force` myself; that one is mine, not yours.)
-- One idea per experiment. Commit before each eval.
-- KEEP means the commit stays. Anything else means git reset --hard HEAD~1.
-- Print one context line before each experiment, so I can see where you are:
-  [exp <n> | <branch> | vs <measure_commit> | stop: autor3search-rust stop]
-
-Run the loop until I stop you. I stop you by running `autor3search-rust stop`
-in my own terminal — you will see it as "stop_requested": true in a verdict.
-When you do: apply that verdict, do not start another experiment, run
-`autor3search-rust report`, summarize what you tried, and exit the loop.
+DIAGNOSIS      what is hot, and the evidence (profile %, counters)
+CONTRACT       what must stay byte-identical / ordered / panic-identical
+HYPOTHESIS     which operation disappears; expected MIR/LLVM/asm change
+PATCH          smallest diff that tests the hypothesis
+CORRECTNESS    tests run, edge cases covered, contract changes declared
+BENCHMARK      exact commands, raw times, dispersion, p-value if any
+ASSEMBLY       before/after hot block diff, or "not inspected"
+DECISION       keep / revert / unknown, and why
 ```
+
+## References
+
+| File | Read when |
+|---|---|
+| `references/asm-reading.md` | you must explain *why* code is slow from machine code |
+| `references/measurement.md` | designing or trusting a benchmark; hyperfine/criterion/perf stat |
+| `references/profiling.md` | perf record/report/annotate, samply, flamegraphs, cache/contention counters |
+| `references/harness-cli.md` | driving autor3search-rust: commands, config, verdicts, scoring |
+| `references/optimization-catalog.md` | choosing what to try, with "when it hurts" |
+| `references/semantics-traps.md` | before any change that touches behavior, floats, ordering, threads |
+| `references/diagnostics.md` | symptom → instrument → likely cause lookup |
+| `references/examples.md` | worked before/after with measurements and asm |
+
+## Red flags — stop and reconsider
+
+- You are about to say "faster" without a command output in this session.
+- You are editing a test, bench, or boundary to make the number go up.
+- Your diff changes two unrelated things.
+- You reached for `unsafe`, `#[inline(always)]`, `-C target-cpu=native`, or
+  `wrapping_*` before profiling.
+- You have a profile but have not looked at a single instruction the samples
+  point to.
+- The optimization is invisible in the asm — you changed style, not code.
+- The win only appears at one input size, or only in debug, or only once.
+- You cannot state what would make you revert.
