@@ -153,6 +153,15 @@ Warm up the allocator and caches before the measured region.
 | measuring startup instead of work | criterion, or `hyperfine` with an in-process loop |
 | benchmark tuned to one size | sweep n = 0, 1, 2, 3, 16, 1k, 1M |
 | comparing against a stale baseline | re-measure both sides in the same session |
+| two variants benchmarked sequentially in one process | allocator state from A biases B; run each in its own process or alternate order and check the distribution |
+
+**Allocator-state contamination is real and easy to miss.** A measured case
+(`docs/rust_perf_case/RESULTS.md` in the autor3search-rust repo) showed
+`with_capacity` at +60 % in criterion, because variant A ran first and changed
+the allocator state for variant B. A standalone interleaved test revealed a
+bimodal distribution: the second variant was ~50 % slower whenever it ran
+after the first, regardless of which code it was. If a result appears only for
+the second benchmark in a file, suspect state, not code.
 
 ## 8. Report format
 

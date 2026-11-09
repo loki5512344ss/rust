@@ -1,5 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rust_perf_case::{make_rows, select_active_after, select_active_before};
+use std::hint::black_box; // criterion::black_box is deprecated since criterion 0.8
 
 fn bench_select(c: &mut Criterion) {
     let mut group = c.benchmark_group("select_active");

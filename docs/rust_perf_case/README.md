@@ -1,6 +1,6 @@
 # Case study: Rust filter + preallocation
 
-The functions return exactly the same ordered IDs. The candidate (`with_capacity(rows.len())`) may be faster for dense outputs, but may retain excess capacity for sparse outputs. **No measurements have been performed in the creator's environment.**
+The functions return exactly the same ordered IDs. The candidate (`with_capacity(rows.len())`) may be faster for dense outputs, but may retain excess capacity for sparse outputs. **Measurements have been run on one machine; see [`RESULTS.md`](RESULTS.md)** for the numbers, the allocator-state artifact that flipped one scenario by +60 %, and what remains unverified.
 
 Requirements: Rust >=1.88, Cargo. Criterion is pinned to `0.8.2`. On your first run, create `Cargo.lock` with `cargo generate-lockfile`; retain that lock file in reports. Execute:
 
