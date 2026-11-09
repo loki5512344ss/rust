@@ -68,6 +68,27 @@ Workflow:
 `perf report` percentages are samples, not time guarantees; a 60 % sample
 share on `idiv` means "look here first", not "idiv costs 60 %".
 
+## 3b. Top-Down (TMA): which pipeline stage is starved
+
+When counters show a problem but not its cause, split slots into four buckets:
+
+```bash
+perf stat --topdown -- ./target/release/app input.bin
+perf stat -M TopdownL1 -- ./target/release/app input.bin   # older kernels
+toplev -l2 -- ./target/release/app input.bin               # pmu-tools, level 2-3
+```
+
+| Bucket | Means | Act on |
+|---|---|---|
+| Retiring | slots do useful work | algorithm, fewer operations |
+| Bad speculation | mispredicted branches | distribution, sort/partition, branchless only if both sides cheap |
+| Frontend bound | instruction supply stalls | code size, I-cache, inlining, monomorphization |
+| Backend bound | execution stalls; **memory** vs **core** | memory: layout/stride/TLB; core: dependency chains, `div`, ports |
+
+Percentages are slots, not time, and sum to ~100 %. High Retiring can still
+be wasted work. TMA needs PMU support; under virtualization it is often
+unavailable — write `not available` instead of guessing.
+
 ## 4. `samply` — sampling without kernel perf
 
 ```bash

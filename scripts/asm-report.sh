@@ -62,14 +62,17 @@ if ! cargo asm --version >/dev/null 2>&1; then
   die "cargo-show-asm is missing: cargo install cargo-show-asm (provides 'cargo asm')"
 fi
 
-# cargo asm resolves the crate from the manifest, so run from the repo root.
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || ROOT=$PWD
-[[ -f "$ROOT/Cargo.toml" ]] || die "no Cargo.toml at repo root '$ROOT'"
+# `cargo asm` resolves the crate from the nearest Cargo.toml, so locate it
+# rather than assuming the git root is the crate root (workspaces, nested cases).
+MANIFEST=$(cargo locate-project --message-format plain 2>/dev/null) \
+  || die "no Cargo.toml found from '$PWD'"
+CRATE_DIR=$(dirname -- "$MANIFEST")
+GIT_ROOT=$(git -C "$CRATE_DIR" rev-parse --show-toplevel 2>/dev/null) || GIT_ROOT=$CRATE_DIR
 
 # One directory per symbol keeps `::` out of the filesystem.
 SLUG=${SYMBOL//[^A-Za-z0-9_.-]/_}
 DIR=${OUT:-target/asm/$SLUG}
-[[ "$DIR" = /* ]] || DIR="$ROOT/$DIR"
+[[ "$DIR" = /* ]] || DIR="$GIT_ROOT/$DIR"
 
 mkdir -p -- "$DIR"
 HAD_BEFORE=0
@@ -79,7 +82,7 @@ if [[ -f "$DIR/after.s" ]]; then
 fi
 
 printf -v CMDLINE '%q ' cargo asm "${ART[@]}" --rust "$SYMBOL"
-if ! ( cd "$ROOT" && cargo asm "${ART[@]}" --rust "$SYMBOL" ) \
+if ! ( cd "$CRATE_DIR" && cargo asm "${ART[@]}" --rust "$SYMBOL" ) \
      >"$DIR/after.s" 2>"$DIR/asm.err"; then
   printf 'cargo asm failed; stderr:\n' >&2
   cat "$DIR/asm.err" >&2
@@ -93,15 +96,15 @@ fi
 # Keep a failed run from leaving a truncated dump that looks real.
 rm -f -- "$DIR/asm.err"
 
-GIT_HEAD=$(cd "$ROOT" && git rev-parse HEAD 2>/dev/null) || GIT_HEAD='not a git repo'
-GIT_BRANCH=$(cd "$ROOT" && git rev-parse --abbrev-ref HEAD 2>/dev/null) || GIT_BRANCH=unknown
+GIT_HEAD=$(cd "$GIT_ROOT" && git rev-parse HEAD 2>/dev/null) || GIT_HEAD='not a git repo'
+GIT_BRANCH=$(cd "$GIT_ROOT" && git rev-parse --abbrev-ref HEAD 2>/dev/null) || GIT_BRANCH=unknown
 {
   printf 'date: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'git HEAD: %s\n' "$GIT_HEAD"
   printf 'git branch: %s\n' "$GIT_BRANCH"
   printf 'symbol: %s\n' "$SYMBOL"
   printf 'artifact: %s\n' "${ART[*]}"
-  printf 'command: cd %q && %s\n' "$ROOT" "$CMDLINE"
+  printf 'command: cd %q && %s\n' "$CRATE_DIR" "$CMDLINE"
   printf 'cargo asm: %s\n' "$(cargo asm --version 2>&1 | head -n 1)"
   printf 'rustc:\n'
   rustc -Vv

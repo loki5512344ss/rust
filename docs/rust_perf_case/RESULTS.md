@@ -24,12 +24,12 @@ result.
 
 | toolchain | `cargo test --locked --all-targets` | `cargo clippy -- -D warnings` |
 |---|---|---|
+| 1.88.0 (declared MSRV) | pass | not run (clippy component not installed) |
 | stable 1.99.1 | pass (2 tests + all bench scenarios) | pass (after the `black_box` fix) |
 | beta 1.100.0-beta.13 (2026-11-07) | pass | pass |
 
-`rust-version = "1.88"` in `Cargo.toml` is not exercised: no 1.88 toolchain is
-installed here. The matrix proves the case builds on the current stable and on
-the 1.100 beta; it does not prove the declared MSRV.
+The declared `rust-version = "1.88"` is exercised: 1.88.0 builds and passes the
+tests, including the criterion 0.8.2 dependency graph.
 
 ## Correctness and hygiene
 
@@ -105,6 +105,31 @@ Control cases from the same test (stable, not bimodal):
 (At 50 % the branch `if active != 0` is unpredictable too, which is why both
 variants are slower there than at 99 % — a second effect, visible in both.)
 
+## Harness validation: both verdict paths, real runs
+
+The same case crate was copied to a separate git repository and driven through
+`autor3search-rust` itself (`init` → `doctor` → `baseline` → one patch →
+`eval --json`), with `count: 4`, `sample_size: 10`, `measurement_time: 1s`
+to keep each experiment short.
+
+| run | declared benchmark | verdict | score | reason |
+|---|---|---|---:|---|
+| nov9 | `before/n=262144/active=99%` | **DISCARD** | 0.9920 (−0.80 %) | `no_significant_improvement` |
+| nov9b | `before/n=4096/active=50%` | **KEEP** | 0.9497 (−5.03 %) | `improved` |
+
+Both paths work: a row is written for each, `KEEP` advances `measure_commit`
+and re-points the pinned worktree, `DISCARD` means `git reset --hard HEAD~1`.
+The harness also warned that a 95 % interval needs ≥ 6 observations and
+`count: 4` cannot produce one — correct, and worth heeding before trusting
+either verdict.
+
+The measurement is cross-process (pinned worktree vs candidate), which is why
+it disagrees with the in-process criterion run above: `n=262144/99 %` measured
+−9 % in-process and −0.8 % here; `n=4096/50 %` measured +60 % in-process and
+−5 % here. That is the allocator-state artifact from the previous section, seen
+from the other side: **the separate-process measurement is the trustworthy
+one.**
+
 ## Conclusions
 
 1. `with_capacity` is **not** automatically faster. It wins when the output is
@@ -119,8 +144,9 @@ variants are slower there than at 99 % — a second effect, visible in both.)
 ## What is still not verified
 
 - `perf` sampling (denied here), so no instruction-level explanation.
-- Rust 1.88 (declared MSRV): no toolchain installed, so `rust-version` is
-  unverified. 1.99.1 stable and 1.100.0-beta.13 both build, test and lint.
+- 1.88.0 builds and tests the case (MSRV verified for tests); clippy was not
+  run on 1.88 because its component is not installed.
+- Rust 1.99.1 stable and 1.100.0-beta.13 both build, test and lint.
 - Other CPUs, other allocators (`jemalloc`, `mimalloc`), other selectivities.
 - The guide's own claim that the case "may retain excess capacity for sparse
   outputs": true by construction, but its cost is not measured here beyond the

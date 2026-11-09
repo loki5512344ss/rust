@@ -1,6 +1,6 @@
 ---
 name: autor3search-rust
-description: Use when asked to make a Rust crate faster, optimize or tune Rust performance, fix a slow function or hot loop, reduce allocations/latency/binary size, read x86-64 asm or LLVM IR to explain a regression, benchmark with criterion or hyperfine, profile with perf or samply, or run an autor3search-rust KEEP/DISCARD optimization loop. Triggers include "ускорить", "оптимизировать Rust", "тормозит", "почему медленно", "cargo asm", "perf annotate".
+description: Use when asked to make a Rust crate faster, optimize or tune Rust performance, fix a slow function or hot loop, reduce allocations/latency/binary size, read x86-64 asm or LLVM IR to explain a regression, benchmark with criterion or hyperfine, profile with perf or samply, experiment with several rewrites of the same code and log the proven method, or run an autor3search-rust KEEP/DISCARD optimization loop. Triggers include "ускорить", "оптимизировать Rust", "тормозит", "почему медленно", "поэкспериментируй с оптимизацией", "cargo asm", "perf annotate".
 ---
 
 # autor3search-rust: measure, diagnose, patch, prove
@@ -12,6 +12,18 @@ guess, and a guess is not a result.
 **Order of operations, always:** asm/IR explains *why*. Profiles and
 benchmarks decide *whether*. Never lead with an optimization idea you have not
 localized in a profile or a disassembly.
+
+## Two modes
+
+| The request | Mode | Read first |
+|---|---|---|
+| "make this faster", one known hot spot, a regression to fix | **Fix mode** (default): one hypothesis, one minimal patch | this file |
+| "experiment with optimizing this", "try a few approaches", "rewrite it several ways" | **Experiment mode**: 4–8 structurally different implementations, each measured against a frozen baseline, winner kept, method written to `OPTIMIZATION_LOG.md` | `references/experimentation.md` |
+
+Experiment mode does **not** relax the iron rules. Radical rewrites are allowed;
+mixing two ideas in one candidate is not, and an unmeasured rewrite is not a
+result. The log entry is part of the deliverable: a proven method with numbers,
+costs and applicability conditions — or an honest "nothing beat the noise".
 
 ## Iron rules
 
@@ -255,6 +267,7 @@ DECISION       keep / revert / unknown, and why
 
 | File | Read when |
 |---|---|
+| `references/experimentation.md` | running a multi-variant experiment and logging proven methods |
 | `references/asm-reading.md` | you must explain *why* code is slow from machine code |
 | `references/measurement.md` | designing or trusting a benchmark; hyperfine/criterion/perf stat |
 | `references/profiling.md` | perf record/report/annotate, samply, flamegraphs, cache/contention counters |
