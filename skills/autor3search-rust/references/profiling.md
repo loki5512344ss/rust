@@ -138,6 +138,21 @@ throughput that gets *worse* from 4→8 threads. Fix: `#[repr(align(64))]`
 padding, per-thread accumulators, sharding. Verify on the real CPU; line size
 and effect vary.
 
+Two traps:
+
+- HITM means a line modified in another cache was requested. It is a **signal
+  to investigate**, not proof of false sharing: true sharing (one shared
+  counter) looks similar. Prove it with offsets: different fields at different
+  offsets of the same line, each written by its own thread. Then show HITM
+  falling *and* wall time falling under a plain run without `perf`.
+- `perf mem` reports sampled accesses with use-latency (queueing included),
+  biased by `ldlat` and the sampling period. It is not "ns to DRAM". On AMD
+  use IBS, on arm64 SPE where available; if the event is unsupported, write
+  `unsupported`, never substitute generic cache-misses.
+
+`perf c2c` and `perf mem` need PMU access; if `perf stat --topdown` or these
+fail, fall back to wall-clock A/B plus layout analysis and say so.
+
 ## 7. When `perf` is unavailable
 
 1. `/usr/bin/time -v` for wall/RSS/context switches; `time` builtin for coarse

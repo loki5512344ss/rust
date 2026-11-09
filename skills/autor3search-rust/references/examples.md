@@ -289,7 +289,31 @@ wins clearly.
 
 ---
 
-## 9. Reporting template for any of the above
+## 9. False sharing: large wall-clock effect, unproven HITM (measured)
+
+Case: four independent `AtomicU64` counters, one per thread, 5M `fetch_add`
+each. `dense` keeps them adjacent in one `Vec`; `padded` puts each in
+`#[repr(align(64))]`.
+
+| variant | wall time (6 runs, ABBA, `taskset -c 4-7`) |
+|---|---|
+| dense | 337, 380, 382, 389, 340, 387 ms |
+| padded | 34.5, 35.5, 38.8, 54.4, 33.9, 33.9 ms |
+
+About 7–11×. What this proves and does not:
+
+- It proves a large runtime effect of the memory layout on this CPU.
+- It does **not** by itself prove false sharing rather than true sharing:
+  `perf c2c` is denied here, so there are no HITM counts, no offsets and no
+  per-instruction attribution. Say "consistent with false sharing" unless you
+  have the address/offset evidence.
+- 64 B is an x86-64 assumption. On another CPU the line size and the padding
+  that helps will differ.
+
+Lesson for reports: a huge wall-clock delta is still a result, but label the
+missing evidence instead of upgrading a hypothesis to a cause.
+
+## 10. Reporting template for any of the above
 
 ```text
 DIAGNOSIS    perf: count_words 92% of samples; asm: 3 allocator calls per char

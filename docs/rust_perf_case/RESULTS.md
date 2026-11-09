@@ -35,8 +35,11 @@ tests, including the criterion 0.8.2 dependency graph.
 
 ```bash
 cargo generate-lockfile
+cargo fmt --all -- --check          # passes after rustfmt was applied to two files
 cargo test --locked --all-targets     # 2 integration tests + all bench scenarios in test mode: ok
 cargo clippy --locked --all-targets -- -D warnings
+bash scripts/smoke.sh                 # fmt + test + clippy + the full bench: passes
+python3 scripts/analyze_abba.py scripts/sample_synthetic.csv   # synthetic only
 ```
 
 The first clippy run **failed**: `criterion::black_box` is deprecated in
@@ -130,6 +133,31 @@ it disagrees with the in-process criterion run above: `n=262144/99 %` measured
 from the other side: **the separate-process measurement is the trustworthy
 one.**
 
+## False-sharing example (wall-clock only)
+
+`examples/false_sharing.rs` was added with the 2026-11-09 edition. On this
+machine, 4 workers, 5,000,000 `fetch_add` per worker, `taskset -c 4-7`,
+interleaved `dense/padded/padded/dense` × 3:
+
+| variant | wall time |
+|---|---|
+| `dense` (four adjacent `AtomicU64`) | 337, 380, 382, 389, 340, 387 ms |
+| `padded` (`#[repr(align(64))]` each 64 B) | 34.5, 35.5, 38.8, 54.4, 33.9, 33.9 ms |
+
+That is roughly a **7–11×** difference, which is the expected order for
+cache-line ping-pong on a 4-thread contended counter experiment. It is a
+wall-clock result only: `perf c2c`/`perf mem` are denied here
+(`perf_event_paranoid=2`), so no HITM counts, no offsets and no causal proof
+from hardware counters. The 64-byte alignment is an x86-64 assumption, not a
+portable one, and the host was under load 7–11.
+
+The statistical helper `scripts/analyze_abba.py` was run on
+`scripts/sample_synthetic.csv`: it reports `scenarios=1`,
+`individual_CI_level=95.000%`, a paired bootstrap interval and an explicit
+"fewer than 10 paired blocks: exploratory" warning, and states that no
+Mann–Whitney U is computed. That validates the code path on labelled synthetic
+data, not any Rust result.
+
 ## Conclusions
 
 1. `with_capacity` is **not** automatically faster. It wins when the output is
@@ -143,7 +171,11 @@ one.**
 
 ## What is still not verified
 
-- `perf` sampling (denied here), so no instruction-level explanation.
+- `perf` sampling (denied here), so no instruction-level explanation. The same
+  denial blocks `perf stat --topdown`, `perf mem` and `perf c2c`, so §31.6–31.8
+  remain unexercised on hardware counters in this fork.
+- False sharing is shown by wall time (~7–11×) but not proven by HITM counts;
+  `dense` vs `padded` is also not a general serving workload.
 - 1.88.0 builds and tests the case (MSRV verified for tests); clippy was not
   run on 1.88 because its component is not installed.
 - Rust 1.99.1 stable and 1.100.0-beta.13 both build, test and lint.

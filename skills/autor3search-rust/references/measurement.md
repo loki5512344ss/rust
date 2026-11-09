@@ -138,6 +138,24 @@ Warm up the allocator and caches before the measured region.
 - If the effect is real but < 1 %, write `real but below threshold` — not
   "no change".
 
+### 6.1. Which test, and why the pairing matters
+
+ABBA blocks are **paired, dependent** observations: A and B in the same block
+share the machine state. Resample *whole blocks*, never individual iterations.
+
+| Data / question | Valid procedure | What it cannot tell you |
+|---|---|---|
+| paired ABBA blocks, effect + CI | **paired bootstrap of `log(A/B)`** (percentile CI) | causality; small-n CIs are optimistic |
+| paired blocks, test of zero shift | Wilcoxon signed-rank or paired permutation | assumes something about the pair-difference distribution (signed-rank), design-dependent (permutation) |
+| two independent samples, no pairing | Mann–Whitney U | **not** a valid main test for paired ABBA data; not a test of equal medians without extra assumptions |
+| m pre-declared scenarios | **Bonferroni** (`alpha/m` per test; simultaneous CI) or **Holm** (step-down p-values) | it is a correction, not a test; Bonferroni is conservative |
+
+Rules: fix the minimum useful effect *before* the run (e.g. 2 %), report the
+family alpha and how many hypotheses were tested, and do not promote the one
+scenario that happened to pass. If the interval includes 1.0, or excludes it
+but stays below the practical floor, the verdict is `unknown`, not `keep`.
+`p < 0.05` alone is not an engineering result.
+
 ## 7. Things that silently invalidate a measurement
 
 | Invalidator | Fix |

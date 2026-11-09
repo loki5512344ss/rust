@@ -20,8 +20,11 @@ fn deterministic_matrix_preserves_behavior() {
     for &size in &[0, 1, 2, 3, 31, 32, 33, 1_024, 10_000] {
         for &percent in &[0, 1, 10, 50, 90, 99, 100] {
             let rows = make_rows(size, percent);
-            assert_eq!(select_active_before(&rows), select_active_after(&rows),
-                       "size={size}, active_percent={percent}");
+            assert_eq!(
+                select_active_before(&rows),
+                select_active_after(&rows),
+                "size={size}, active_percent={percent}"
+            );
         }
     }
 }

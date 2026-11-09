@@ -29,8 +29,9 @@ pub fn make_rows(count: usize, active_percent: u8) -> Vec<(u64, u8)> {
     let mut seed = 0x0123_4567_89ab_cdef_u64;
     let mut rows = Vec::with_capacity(count);
     for i in 0..count {
-        seed = seed.wrapping_mul(6_364_136_223_846_793_005)
-                   .wrapping_add(1_442_695_040_888_963_407);
+        seed = seed
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         let active = u8::from(((seed >> 32) % 100) < u64::from(active_percent));
         rows.push((i as u64, active));
     }

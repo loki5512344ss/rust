@@ -10,9 +10,10 @@ patch one thing → prove correctness and speed**.
 | Path | What it is |
 |---|---|
 | `skills/autor3search-rust/SKILL.md` | rewritten skill: phases, iron rules, output contract |
-| `skills/autor3search-rust/references/` | 8 lookup files (see below) |
-| `docs/rust_guide.md` | Russian guide, edition 2026-11-09 (stable 1.99.1 / beta 1.100) |
-| `docs/rust_perf_case/` | reproducible Cargo case: criterion bench, tests, ABBA bootstrap script |
+| `skills/autor3search-rust/references/` | 9 lookup files (see below) |
+| `docs/rust_guide.md` | Russian guide, edition 2026-11-09 with Top-Down/`perf mem`/`perf c2c` and the nine-video audit |
+| `docs/rust_video_audit.md` | the full audit behind guide §47 (source claims, what was and was not verified) |
+| `docs/rust_perf_case/` | reproducible Cargo case: criterion bench, tests, ABBA bootstrap script, false-sharing example |
 | `scripts/install-skill.sh` | install/copy/link/uninstall into local agent harnesses |
 | `scripts/bench-ab.sh` | interleaved A/B benchmark wrapper (hyperfine) |
 | `scripts/asm-report.sh` | before/after asm dump for one function (`cargo asm`) |
@@ -39,6 +40,7 @@ This fork replaces it with:
 | `semantics-traps.md` | contract classes, forbidden transformations, floats, `unsafe` checklist, Miri/Loom/fuzz |
 | `diagnostics.md` | symptom → instrument → likely cause |
 | `examples.md` | worked before/after with measurement and asm |
+| `experimentation.md` | multi-variant "rewrite it several ways" experiments, with a log of proven methods |
 
 Key design choices:
 
@@ -67,6 +69,42 @@ The skill was tested A/B on a small crate with a deliberately quadratic
 | result | ~3× but a new data structure to maintain | −31 %, −30 % instructions, ~7 200× fewer allocations |
 
 The measured case is written up in `skills/autor3search-rust/references/examples.md` §8.
+
+## The 2026-11-09 second edition (Top-Down / c2c / video audit)
+
+The upstream guide was reissued with:
+
+- `§31.6–31.8`: Top-Down L1/L2 (slots, not time), `perf mem` (use-latency,
+  AMD IBS / arm64 SPE), `perf c2c` and the true-sharing vs false-sharing
+  distinction (HITM is a signal, not proof).
+- `§42.2.1`: paired bootstrap / Wilcoxon / Mann–Whitney / Bonferroni / Holm
+  matrix, and `analyze_abba.py` now applies a Bonferroni correction across CSV
+  scenarios by default.
+- `§47`: an audit of nine videos, with a `hyperfine → samply → DHAT` workflow,
+  build-time notes (`debug = "line-tables-only"`, nightly `-Zthreads`,
+  Cranelift) and an explicit list of claims not to copy.
+- `examples/false_sharing.rs` and the audit file `Rust_Video_Audit_9_Files.md`.
+
+Fork adjustments on top of that edition:
+
+- the two corrections above were lost in the reissue and are re-applied;
+- `RESULTS.md` stays a **measured** report (the reissue ships a `NOT MEASURED`
+  template) and gains the false-sharing run: 4 threads, 5M increments each,
+  `dense` 337–389 ms vs `padded` 34–54 ms (~7–11×), wall-clock only because
+  `perf c2c` is denied here;
+- the header no longer claims "no rustc in the editing environment";
+- `analyze_abba.py` and the example were actually compiled/run, and the guide
+  says which claims remain unverified;
+- the skill gained an **experiment mode** (`references/experimentation.md`) and
+  the statistics/subsection in `measurement.md`, plus the HITM caveat in
+  `profiling.md`.
+
+## Harness end-to-end
+
+`autor3search-rust 0.2.1` was run on a copy of `docs/rust_perf_case` in its own
+git repository: `init` → `doctor` → `baseline` → patch → `eval --json`. Both
+verdict paths were exercised: `DISCARD` (score 0.9920, −0.80 %) and `KEEP`
+(score 0.9497, −5.03 %). Details in `docs/rust_perf_case/RESULTS.md`.
 
 ## Installing the skill
 
