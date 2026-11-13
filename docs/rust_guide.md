@@ -3810,11 +3810,11 @@ scripts/diff-fuzz.sh --out <DIR> --old my_crate::old::count --new my_crate::coun
 | `perf diff`, `-c ratio`, ловушка с разными именами бинарников | Проверено | §48.3 |
 | `-C remark=loop-vectorize` | Проверено | rustc 1.99.1, вывод в §48.4 |
 | criterion 0.8.2: `--save-baseline`, `--baseline`, `cargo test --benches` | Проверено | `--help` и прогон в `docs/rust_perf_case` |
-| Callgrind / `iai-callgrind` | **Не проверено** | valgrind не установлен |
-| Дифференциальные flame graph (`difffolded.pl`, `-n`, `--negate`) | **Не проверено** | FlameGraph/inferno не установлены, стеки запрещены |
+| Callgrind | Проверено 2026-11-13 | valgrind 3.25.1: `valgrind --tool=callgrind` + `callgrind_annotate` на тестовой программе, Ir посчитаны (651 417). `iai-callgrind` не проверялся |
+| Дифференциальные flame graph | Проверено 2026-11-13 | `perf record -g` (после `kernel.perf_event_paranoid=1`) → `perf script` → `inferno-collapse-perf` → `inferno-diff-folded [-n]` → `inferno-flamegraph`, получен SVG. Perl-вариант `difffolded.pl` не проверялся |
 | Stabilizer с Rust | **Не проверено** | — |
-| Kani: синтаксис проверок, `cargo kani` | **Не проверено** | Kani не установлен |
-| `cargo-fuzz` | **Не проверено** | не установлен |
+| Kani: `#[kani::proof]`, `cargo kani` | Проверено 2026-11-13 | kani 0.68.0: доказано `old(v,i) == new(v,i)` для срезов длиной 1–4 (VERIFICATION SUCCESSFUL, 0,7 с) |
+| `cargo-fuzz` | Проверено 2026-11-13 | `cargo +nightly-2026-08-21 fuzz init` и `fuzz run -- -max_total_time=5`: 1,7 млн запусков. Нужен nightly (его поставил `cargo kani setup`) |
 | `scripts/bench-ab.sh`, `scripts/instr-count.sh`, `scripts/layout-check.sh`, `scripts/perf-diff.sh` | Запущены 2026-11-12: обычный путь и отказы (usage, занятая машина, упавшая команда); запуск нашёл и исправил две ошибки: hyperfine 2.0 по умолчанию `--shell=none` (скрипты теперь передают `--shell=default`) и локаль в CSV-выводе perf (`instr-count.sh` теперь ставит `LC_ALL=C`) | A/B `false_sharing dense/padded` из `docs/rust_perf_case`; `docs/rust_perf_case/RESULTS.md`, раздел «Fork scripts, run on 2026-11-12» |
 | `scripts/vec-remarks.sh`, `scripts/diff-fuzz.sh` | Запущены 2026-11-12 целиком: vec-remarks — success/missed/analysis через RUSTC_WRAPPER (все утверждения заголовка перепроверены); diff-fuzz — все три сигнатуры, проход, падение и replay. Отказ «инструмент не установлен» не сработал ни разу (всё установлено); лестницы отказов для машин без perf остались непроверенными | там же |
 | Гейт `unsafe` и дельты по бенчмаркам в `eval --json` | Проверено 2026-11-12 | `cargo test --lib` (18 тестов модуля `unsafe_gate`, 243 lib-теста всего), `tests/pipeline_gates.rs` (23 passed, включая срабатывание до сборки и переименование файла с неизменённым `unsafe`), `cargo test --test cmd_eval -- --ignored` (4 passed: строки `benchmarks` на KEEP и DISCARD) |
