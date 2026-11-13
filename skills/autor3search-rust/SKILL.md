@@ -38,7 +38,10 @@ costs and applicability conditions — or an honest "nothing beat the noise".
 4. **Semantic contract first.** Before touching code, write down what must
    stay identical: output bytes, ordering, stable sort, event order, panic vs
    error, float tolerance, overflow behavior, API/layout.
-5. **No `unsafe` as an optimization.** This harness has no unsafe gate. Every
+5. **No `unsafe` as an optimization.** This fork's harness fails any
+   experiment that adds or changes an `unsafe` region (`FAIL(unsafe_added)`);
+   upstream's does not, and neither catches a safe edit that breaks an existing
+   region's invariant. Outside the harness loop nothing checks at all: every
    `unsafe` you introduce is unreviewed UB surface. `get_unchecked` is the
    cheapest fake win in Rust and the most expensive bug.
 6. **Order of attack:** asymptotics → remove work → allocations → data layout
@@ -117,8 +120,11 @@ cat /proc/sys/kernel/perf_event_paranoid   # 2 = user-space only; 1 or 0 for ker
 still refuse `perf record` outright (`Failure to open event 'cpu/cycles/Pu'`).
 Fallback ladder, in order:
 
-1. `perf stat` — often still works when `record` does not.
-2. `perf record -e cpu-clock -g -- ...` or `-e task-clock` (software event).
+1. `perf stat` — often still works when `record` does not. Instruction
+   counts A/B: `scripts/instr-count.sh`.
+2. Flat sampling without `-g`: `perf record -e cycles:u` or `-e task-clock:u`.
+   A kernel that refuses call graphs (`-g`, `--call-graph dwarf`) may still
+   allow these; you get hot symbols and `perf annotate`, no stacks.
 3. `samply record -- ...` (does not need kernel perf counters).
 4. No profiler at all: `--emit=asm`, criterion/hyperfine, and a counting
    global allocator in a **bench-only** binary (`#[global_allocator]` in the
@@ -204,7 +210,8 @@ Catalog with "when it hurts": `references/optimization-catalog.md`.
 ## Phase 5 — the autor3search-rust loop (only when asked / repo has benches)
 
 ```bash
-cargo install --locked autor3search-rust
+cargo install --locked autor3search-rust    # upstream: no unsafe gate, no per-benchmark JSON
+# or, for this fork's harness:  cargo install --locked --path <checkout of the fork>
 git status                                  # must be clean
 autor3search-rust init                      # shows discovered benchmarks
 git add -A && git commit -m "autor3search-rust init"
@@ -245,6 +252,21 @@ perf stat ... before/after            # cycles, instructions, cache-misses
 
 Report both the win and the cost: binary size, compile time, readability,
 new dependencies, memory. A 3% win that adds an `unsafe` block is a loss.
+
+## Fork scripts (in the fork checkout's `scripts/`)
+
+| Script | Use it when |
+|---|---|
+| `bench-ab.sh` | wall-clock A/B of two commands, interleaved blocks |
+| `instr-count.sh` | the wall-clock delta is inside the noise: A/B by `perf stat` instruction counts (`measurement.md` §9) |
+| `layout-check.sh` | a win is under ~3 %: does it survive a layout perturbation? (`measurement.md` §10) |
+| `perf-report.sh` / `perf-diff.sh` | evidence bundle for one binary / before-vs-after profile (`profiling.md` §3c) |
+| `asm-report.sh` | before/after asm of one function |
+| `vec-remarks.sh` | "why is this loop not vectorized" from LLVM remarks, before reading asm (`profiling.md` §7b) |
+| `diff-fuzz.sh` | scaffold an old-vs-new differential test with no dependencies (`semantics-traps.md` §8c) |
+
+Instructions detect and attribute; wall-clock decides. A result that
+`layout-check.sh` calls `layout-sensitive` is reported as "no effect".
 
 ## Output contract
 

@@ -15,8 +15,11 @@ had never been compiled or measured. It has now been run on one machine.
 | pinning | `taskset -c 4` for every benchmark |
 | load | ~7 on 24 threads during the run (desktop session active) |
 
-`perf record` is denied in this environment (`perf_event_paranoid=2` and the
-kernel refuses `cpu/cycles/Pu`), so no sampling profile is included. Absolute
+`perf record` was denied when this case was run (`perf_event_paranoid=2` and
+the kernel refused `cpu/cycles/Pu`), so no sampling profile is included.
+Re-checked on 2026-11-12, same machine: flat `perf record` (`cycles:u`,
+`task-clock:u`) works, every call-graph mode (`-g`, `--call-graph dwarf`) is
+still refused. The measurements below were not redone with a profile. Absolute
 numbers are specific to this machine; the *direction* of each comparison is the
 result.
 
@@ -186,3 +189,59 @@ data, not any Rust result.
 
 Reproduce with the commands above; treat a single run as a hypothesis, not a
 result.
+
+## Fork scripts, run on 2026-11-12
+
+The five new fork scripts and the patched `bench-ab.sh` were executed on this
+machine (idle, 1-min load 1.5–3 of 24). A/B pair for the timing scripts:
+`target/release/examples/false_sharing dense 4 N` vs `padded 4 N` from this
+crate. The runs found two real bugs (both hyperfine 2.0 / locale traps that
+only execution reveals) and disproved no header claim. Every non-zero exit
+below was fired on purpose.
+
+| script | command (from `docs/rust_perf_case`) | exit | observation |
+|---|---|---:|---|
+| `bench-ab.sh` | `--runs 10 --warmup 1 --blocks 5 --prepare 'true' -- dense-1M padded-1M` | 0 | blocks alternate AB/BA/AB/BA/AB, every block −84…−89 % — same sign in AB and BA blocks, so the side mapping is right; overall −87.18 % (81.76 vs 10.49 ms); `--json` carries the per-run times |
+| `bench-ab.sh` (guards) | `--runs 3 --warmup 1 -- …`; `--max-load 0.0001 -- …` | 2; 1 | refuses fewer than 2 runs per block; busy-machine refusal fires on a tiny `--max-load` |
+| `instr-count.sh` | `--runs 3 --json /tmp/instr.json -- dense-2M padded-2M` | 0 | instructions 12,944,634 vs 12,944,541 (−0.00 %, ranges overlap) while cycles −90.66 %: same work, ten times the stalls |
+| `instr-count.sh` (failure) | `--runs 1 -- 'exit 7' 'true'` | 1 | a failing command is reported, nothing is measured |
+| `layout-check.sh` | `--runs 10 --pads "0 1024" -- dense-2M padded-2M` | 0 | −89.86 % at pad 0 and −89.96 % at pad 1024 → `stable`; `LAYOUT_PAD` provably reaches the measured command (`printenv` inside a hyperfine run prints 1025 bytes) |
+| `vec-remarks.sh` | `--bench select_active` (+ `--filter select_active.rs`) on this crate; `--example loops` / `--lib` on a scratch crate with one vectorizable and one non-vectorizable `#[inline(never)]` fn | 0 | remarks are captured through the RUSTC_WRAPPER: 5 applied / 51 missed (loop-vectorize) and 19 / 147 (slp) for the bench; the bench's own loops (`select_active.rs:9,13,16`) are missed with reasons; the scratch example yields one success plus one missed with 3 analysis lines |
+| `perf-diff.sh` | `-- dense-20M padded-20M` | 0 | two flat `cycles:u` records; the dense closure holds 99.97 % of A (16.17 G cycles), the padded closure +99.86 % of B (1.52 G) |
+| `perf-diff.sh` (failures) | `-- dense-2M 'exit 3'`; `-- 'true' 'true'` | 1; 0 | a nonzero command aborts honestly; near-empty records degrade to shell symbols and fire the stripped-binary hint |
+| `diff-fuzz.sh` | `--out <scratch>/tests --old o --new n --sig {slice-u64, slice-u8, str} --iters 300…500`, then `cargo test --release --test diff_fuzz` | 0/1 | all three signatures ran: an equal pair passes; `saturating_add` vs `wrapping_add` fails and the printed `DIFF_FUZZ_REPLAY=…` reruns the exact case; a `str` pair differing on blank lines fails (old=163, new=158); writing into a `tests/` under an autor3search run is refused (exit 1); usage errors exit 2 |
+
+Bugs found by executing, fixed in the scripts:
+
+1. **hyperfine 2.0 defaults to `--shell=none`.** The command string is
+   word-split and exec'd, so `a && b`, pipes or `VAR=x cmd` silently measure
+   the wrong thing (`hyperfine -- 'echo abc | wc -c'` prints `abc | wc -c`,
+   exit 0). `bench-ab.sh` and `layout-check.sh` now pass `--shell=default`
+   before any user extras, so an explicit `-N`/`--shell` from the caller
+   still wins.
+2. **perf's CSV output is locale-dependent.** Under `ru_RU.UTF-8` the
+   percent-enabled field is `100,00`, which the `-x,` separator splits in
+   two, so the multiplexing check in `instr-count.sh` read a truncated
+   number. The script now forces `LC_ALL=C` for its perf runs.
+
+The `vec-remarks.sh` header claims were re-verified on purpose: a lib
+`pub fn` without `#[inline(never)]` emits no remarks (checked both ways on
+the scratch crate), `-C codegen-units=16` silences all remarks, omitting
+`-C debuginfo` yields `<unknown file>:0:0` plus the warning, and the
+RUSTC_WRAPPER tee works through cargo.
+
+Still not verified after this run:
+
+- No "tool missing" refusal fired: hyperfine, perf, python3 and cargo are
+  all installed here, and the perf-denied refusal ladders in
+  `instr-count.sh` and `perf-diff.sh` cannot fire while flat counters and
+  flat records work.
+- `instr-count.sh` never hit counter multiplexing (4 events fit the PMU);
+  `bench-ab.sh`'s post-run load warning never fired (only the pre-run
+  refusal did).
+- `layout-check.sh` perturbs only the environment axis; link order and
+  alignment are manual follow-ups by design.
+- Absolute instruction counts drifted ~5 % between script invocations
+  minutes apart (12.94 M vs 13.65 M for the same command) while staying
+  within ±0.003 % inside each interleaved run — compare A and B within one
+  session, never across sessions.

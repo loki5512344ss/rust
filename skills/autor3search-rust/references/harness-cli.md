@@ -52,6 +52,7 @@ none. Distinguish by whether a new `results.tsv` row appeared.
 | `min_effect_pct` | `1.0` | KEEP requires score `< 1 - min_effect_pct/100` (strict) |
 | `timeout` | `"15m"` | per cargo subprocess phase |
 | `unfreeze` | `[]` | test files exempt from freezing (human-only) |
+| `allow_unsafe` | `false` | **fork addition.** `true` switches the unsafe gate off (human-only). Omitted from a written config while `false` |
 
 The file is hashed at `baseline`; any edit → `FAIL(config_changed)`. It is
 never the agent's to edit, even though it lives in the repo.
@@ -65,6 +66,13 @@ never the agent's to edit, even though it lives in the repo.
    `.cargo/config[.toml]`, `rust-toolchain[.toml]`, any depth) →
    `FAIL(scope_violation)` on add/remove/change.
 4. Config hash → `FAIL(config_changed)`.
+4b. **Unsafe gate (fork addition).** Every changed `.rs` file outside
+    `tests/`/`benches/` is tokenized, baseline commit vs disk. An `unsafe`
+    region — block, `unsafe fn` with its body, `unsafe impl`/`trait`/`extern`,
+    `#[unsafe(..)]` — that the baseline did not contain token for token →
+    `FAIL(unsafe_added)`, with `file:line` in the message. Runs before the
+    build. Removing, moving or reformatting unsafe code passes; comments and
+    string contents are ignored; macro bodies are scanned.
 5. Restore frozen tests from the state store → `FAIL(symlink_swap)`,
    `FAIL(frozen_store_tampered)`.
 6. Inline `#[cfg(test)]` + doctest token hashes → `FAIL(inline_test_modified)`.
@@ -102,10 +110,13 @@ Facts that bite:
 
 - `regressions` and `warnings` are **omitted when empty** (`skip_serializing_if`).
   A parser must not require them.
-- There are **no per-benchmark deltas or p-values** in the JSON except inside
-  `regressions`, which exists only when the guard tripped. On KEEP/DISCARD you
-  learn `score` and nothing per-benchmark; `results.tsv` carries only
-  `best_bench_delta`.
+- **Fork addition:** whenever measurement ran (KEEP and DISCARD), the object
+  carries `benchmarks`: one row per benchmark with `name`, `base_ns`,
+  `cand_ns` (medians), `pct_change`, `p`, `significant` (raw alpha),
+  `keep_threshold_p` (`alpha/k`, the bar a KEEP needs), `n_base`, `n_cand`.
+  Absent on FAIL/CRASH/ABORTED — nothing was measured. Use it to tell "one
+  benchmark moved 8 %" from "everything moved 1 %". Upstream 0.2.1 has no
+  such key; `results.tsv` still carries only `best_bench_delta`.
 - `run.experiment` on `ABORTED` is the pre-existing row count (no row written).
 - Score `0.0` for any gate failure or ABORTED.
 
@@ -170,8 +181,12 @@ Do not touch it. A human may set the env var for containers.
 
 ## 10. What the harness does not protect against (code-verified)
 
-1. **No `unsafe` gate.** A kept diff can introduce `get_unchecked` UB. Review
-   every kept diff yourself; this is the harness's biggest hole.
+1. **The unsafe gate (fork) is narrow.** It refuses new or changed `unsafe`
+   regions. It does not see a *safe* edit that breaks the invariant an
+   unchanged `unsafe` region relies on (deleting the bounds check in front of
+   an existing `get_unchecked`), nor unsafe code reached through a dependency
+   or a proc macro's output. Upstream 0.2.1 has no gate at all. Still review
+   every kept diff that touches a file containing `unsafe`.
 2. `results.tsv` and `run.log` are agent-writable (explicitly exempt from the
    scope gate). Forged rows corrupt `report`/`status`, not verdicts.
 3. Baseline-worktree edits without a commit change no `HEAD`, so they are
@@ -180,7 +195,11 @@ Do not touch it. A human may set the env var for containers.
    (it is neither a locked shape nor hashed).
 5. Freeze/restore covers only the **workspace root** `tests/**`/`benches/**`;
    member-crate test dirs are run but not frozen.
-6. New in-scope source files never get their inline tests hashed.
+6. New in-scope source files never get their inline tests hashed. **Renaming**
+   an existing source file fails with `FAIL(inline_test_modified)`: inline-test
+   hashes are keyed by path and a missing path fails closed by design, so the
+   rename would look like deleted tests. Split a file by extracting into a new
+   module and keeping the old one.
 7. No clippy, no Miri, no allocation metrics (median time only).
 8. `doctor` gates nothing; a throttling laptop still produces verdicts.
 9. The regression guard requires `p < 0.05`; a real 50 % regression measured
@@ -210,9 +229,11 @@ Do not touch it. A human may set the env var for containers.
 
 - `regressions: []` / `warnings: []` never appear (keys are omitted).
 - README claims `eval` reports benchmarks "significant at alpha but not at
-  alpha/k" — not implemented.
+  alpha/k" — upstream does not; this fork's `benchmarks` rows expose
+  `significant` (raw alpha) and `keep_threshold_p` (`alpha/k`), so the
+  distinction is computable, but there is no dedicated flag for it.
 - `program.md`'s reason list omits `symlink_swap`, `frozen_store_tampered`,
-  `baseline_tampered`.
+  `baseline_tampered` (it does list the fork's `unsafe_added`).
 - Exit code `64` is undocumented; harness malfunction also returns `2`.
 - `baseline --force` does not redo a tag.
 - README overstates state-dir unreachability (key is a plain path hash).

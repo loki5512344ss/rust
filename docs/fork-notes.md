@@ -1,7 +1,8 @@
 # Fork notes
 
-This fork (`loki5512344ss/rust`) keeps the upstream harness intact and adds a
-much larger, self-contained agent skill plus a Russian reference guide. The
+This fork (`loki5512344ss/rust`) adds a much larger, self-contained agent skill
+and a Russian reference guide, and — since 2026-11-12 — two changes to the
+harness itself (see "Harness changes"). The
 goal is one workflow: **measure → localize in a profile → explain in asm →
 patch one thing → prove correctness and speed**.
 
@@ -16,11 +17,43 @@ patch one thing → prove correctness and speed**.
 | `docs/rust_perf_case/` | reproducible Cargo case: criterion bench, tests, ABBA bootstrap script, false-sharing example |
 | `scripts/install-skill.sh` | install/copy/link/uninstall into local agent harnesses |
 | `scripts/bench-ab.sh` | interleaved A/B benchmark wrapper (hyperfine) |
+| `scripts/instr-count.sh` | A/B by `perf stat` instruction counts, interleaved |
+| `scripts/layout-check.sh` | does a small win survive a change in environment size |
+| `scripts/vec-remarks.sh` | LLVM remarks on why a loop was or was not vectorized |
+| `scripts/perf-diff.sh` | `perf diff` of two flat profiles, honest refusal without `perf record` |
+| `scripts/diff-fuzz.sh` | differential-fuzz scaffold, old function vs new, no dependencies |
 | `scripts/asm-report.sh` | before/after asm dump for one function (`cargo asm`) |
 | `scripts/perf-report.sh` | `perf stat` + `record` + `annotate` evidence bundle |
 
-Nothing in `src/` is modified: upstream's gates, scoring and CLI behave
-exactly as documented upstream.
+## Harness changes (2026-11-12)
+
+Until this date nothing in `src/` was modified. Two additions now make the
+fork's binary differ from upstream 0.2.1; scoring and every existing gate are
+untouched.
+
+| Change | Where | Effect |
+|---|---|---|
+| unsafe gate | `src/unsafe_gate.rs`, `src/pipeline.rs` step 3b, `Reason::UnsafeAdded` | an experiment that adds or changes an `unsafe` region relative to the baseline commit is `FAIL(unsafe_added)` before the build |
+| `allow_unsafe` | `src/config.rs` | human-only switch for the gate; default `false`, omitted from a written config while `false`, so existing configs keep their hash |
+| per-benchmark rows | `src/bin/autor3search-rust/cmd_eval.rs` | `eval --json` gains `benchmarks` (name, medians, `pct_change`, `p`, thresholds) whenever measurement ran; the text output prints name, medians, `pct_change` and `p`, but not `keep_threshold_p`/`n_base`/`n_cand` |
+| `gitx::file_at` | `src/gitx.rs` | reads a file as of a commit, for the gate |
+
+Why the gate works on tokens and what it cannot see is written at the top of
+`src/unsafe_gate.rs`. Tests: 18 unit tests in that module, 6 gate tests in
+`tests/pipeline_gates.rs`, and the two real-benchmark tests in
+`tests/cmd_eval.rs` (`--ignored`) assert the `benchmarks` rows on KEEP and on
+DISCARD.
+
+Instruction counts are deliberately **not** an `eval` gate: `perf stat` works
+here, but the score must stay one wall-clock number that means the same thing
+on every host, and a PMU counter is absent on many VMs and CI runners. Counters
+are evidence for *detecting* a change (`scripts/instr-count.sh`), not for
+accepting one.
+
+Consequences: `cargo install autor3search-rust` installs **upstream**, without
+either change — build this checkout (`cargo install --path .`) to get them;
+and merges from upstream can now conflict in `pipeline.rs`, `verdict.rs`,
+`config.rs`, `cmd_eval.rs` and `templates/program.md`.
 
 ## The skill
 
@@ -36,7 +69,7 @@ This fork replaces it with:
 | `measurement.md` | designing a benchmark: hyperfine, criterion, ABBA, timers, statistics, invalidators |
 | `profiling.md` | `perf stat`/`record`/`annotate`, samply, flame graphs, `perf c2c`/`mem`, allocations, async/off-CPU |
 | `harness-cli.md` | driving the harness: commands, config schema, gate order, verdict JSON, scoring, what it does not protect |
-| `optimization-catalog.md` | 363 techniques with priority and a "when it hurts" column |
+| `optimization-catalog.md` | 303 distinct techniques with priority and a "when it hurts" column (was 363 rows before duplicates were merged) |
 | `semantics-traps.md` | contract classes, forbidden transformations, floats, `unsafe` checklist, Miri/Loom/fuzz |
 | `diagnostics.md` | symptom → instrument → likely cause |
 | `examples.md` | worked before/after with measurement and asm |
@@ -51,9 +84,10 @@ Key design choices:
 - **The harness only reads criterion.** `hyperfine` proves a CLI-level win by
   hand but cannot feed `eval`; adding a bench target is a `Cargo.toml` change
   and therefore a locked-file, human decision.
-- **No `unsafe` as an optimization.** The harness has no unsafe gate (verified
-  in `src/`), so the skill forbids it unless the whole safety checklist is
-  satisfied.
+- **No `unsafe` as an optimization.** This fork's harness refuses an
+  experiment that adds or changes an `unsafe` region; upstream's has no gate
+  (verified in `src/`). The skill forbids `unsafe` either way unless the whole
+  safety checklist is satisfied.
 
 ### Validation
 

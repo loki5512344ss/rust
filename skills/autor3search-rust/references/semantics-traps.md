@@ -90,6 +90,12 @@ If any box is unchecked, the speedup is not available to you. `get_unchecked`
 passes the tests that happen to cover the tested inputs; that is the entire
 problem.
 
+Fork addition: the harness fails an experiment that adds or changes an
+`unsafe` region relative to the baseline (`FAIL(unsafe_added)`, before the
+build). It compares tokenized regions rather than names, so a new
+`get_unchecked` is caught through the region that contains it; `unsafe` that
+was already there is not judged. Passing the gate is not a safety argument.
+
 ### Tooling that actually checks this
 
 ```bash
@@ -155,6 +161,100 @@ when external calls happen relative to each other.
    inputs.
 5. State which of these you actually ran. "Tests pass" without naming them is
    not evidence.
+
+## 8b. Kani: proving a property for all inputs up to a bound
+
+Tests and fuzzing sample inputs. Kani (a bounded model checker for Rust, from
+the `kani-verifier` project) translates a harness to a logical formula and
+checks it for **every** input value, with loops unrolled up to a bound. If the
+property can fail within the bound, it returns a concrete counterexample.
+
+Good fits for optimization work:
+
+- arithmetic rewrites: `x / 8` vs `x >> 3`, `x % m` vs `x & (m - 1)`,
+  multiply-shift replacing a division, overflow-free midpoint;
+- bit tricks: popcount/SWAR, branchless min/max/abs, sign handling;
+- index arithmetic: a computed index is always `< len`, chunk/remainder
+  splits cover every element exactly once;
+- small `unsafe` blocks: the precondition of `get_unchecked`, `from_utf8_unchecked`
+  or a pointer offset holds for all inputs that reach it.
+
+Shape of a harness (old vs new over all `u32`):
+
+```rust
+#[cfg(kani)]
+mod proofs {
+    #[kani::proof]
+    fn div8_matches_shift() {
+        let x: u32 = kani::any();
+        assert_eq!(crate::old_div8(x), crate::new_div8(x));
+    }
+
+    #[kani::proof]
+    #[kani::unwind(9)]            // loop bound + 1
+    fn sum_matches_on_short_slices() {
+        let v: [u8; 8] = kani::any();
+        let n: usize = kani::any();
+        kani::assume(n <= 8);
+        assert_eq!(crate::old_sum(&v[..n]), crate::new_sum(&v[..n]));
+    }
+}
+```
+
+```bash
+cargo install --locked kani-verifier && cargo kani setup
+cargo kani                       # runs every #[kani::proof]
+```
+
+Limits — the proof is only as wide as these:
+
+- **Bounds.** The second harness proves equality for slices of length ≤ 8,
+  not for all lengths. A bug that needs 9 elements, or a SIMD path that only
+  starts at 16, is outside the proof. State the bound in the report.
+- **Loops** must be unwound; too low a bound fails the unwinding check (good),
+  too high a bound makes the solver run for hours.
+- **Heap-heavy code** (large `Vec`, `HashMap`, trees) and floating-point
+  transcendental functions are slow or unsupported in practice; prove the
+  arithmetic kernel, test the container code.
+- **Concurrency** is out of scope; use Loom (§5).
+- Build time: Kani compiles through its own toolchain and the solver time is
+  unpredictable; keep harnesses small and run them on the changed functions.
+- A proof of `old == new` inherits any bug in `old`. Add independent
+  properties (bounds, monotonicity) where the contract has them.
+
+**Kani is not installed on this machine: the harness and commands above are
+`not verified on this machine` (API as documented by the Kani project).**
+
+## 8c. Differential-fuzz scaffold (no dependencies)
+
+`scripts/diff-fuzz.sh` writes a dependency-free differential test that runs
+the old and the new function on generated inputs and compares the outputs:
+
+```bash
+scripts/diff-fuzz.sh --out <DIR> --old my_crate::old::count --new my_crate::count --sig slice-u64
+# --sig: slice-u64 | slice-u8 | str — the input type both functions take
+# paths start with the LIBRARY name: in an integration test `crate::` is the test crate.
+# writes <DIR>/diff_fuzz.rs; a failure prints a DIFF_FUZZ_REPLAY=... command that reruns that one case.
+# refuses to write into tests/ of a repo under an autor3search run (tests/** is frozen at baseline).
+```
+
+Read and adjust what it generates before trusting it: the input sizes must
+include the boundaries of *your* code (0, 1, lane width ± 1, chunk size ± 1),
+and the comparison must match the contract (exact, or a declared float
+tolerance).
+
+Where it sits:
+
+| Tool | Inputs | Finds | Costs |
+|---|---|---|---|
+| `diff-fuzz.sh` scaffold | pseudo-random + fixed boundary sizes, plain `cargo test` | output mismatches on common shapes | no shrinking, no coverage guidance |
+| `proptest` | generated with strategies, shrinks failures | mismatches with a minimal counterexample | a dev-dependency |
+| `cargo-fuzz` (libFuzzer) | coverage-guided mutation, hours | rare paths, panics, UB with sanitizers | nightly, a fuzz crate, CPU time (not installed here) |
+| Kani (§8b) | all inputs within a bound | any violation within the bound | bounds, solver time (not installed here) |
+
+Use the scaffold first because it needs nothing; move to proptest when you
+need shrinking, to cargo-fuzz when the input is a format (parser, decoder),
+and to Kani when the function is small and the input space is the risk.
 
 ## 9. The two failure classes — do not conflate them
 

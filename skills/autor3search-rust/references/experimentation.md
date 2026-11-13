@@ -147,8 +147,10 @@ the benchmark until something passes.
 - `KEEP` advances the measurement baseline. For fair variant comparison,
   measure every variant against the *frozen* baseline, then apply the winner
   to the branch as one commit.
-- The harness has no allocation metrics and no `unsafe` gate: the log and the
-  differential test are your only record of both.
+- The harness has no allocation metrics: the log is your only record of them.
+  This fork's harness refuses new or changed `unsafe` (`FAIL(unsafe_added)`),
+  so a V7-style variant cannot go through `eval` unless a human set
+  `allow_unsafe: true` before `baseline`; measure it by hand instead.
 - Never let the experiment machinery touch `tests/`, `benches/`, config or
   `results.tsv`.
 

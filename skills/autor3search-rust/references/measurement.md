@@ -195,3 +195,165 @@ caveat:   what this does not measure
 ```
 
 If any line is missing, the result is `unknown`, not "faster".
+
+## 9. Instruction counts as a second metric
+
+Wall-clock answers "is it faster". Retired-instruction counts answer a
+narrower question, "does it execute less code", with far less run-to-run
+noise, so they expose changes that wall-clock noise hides and they still work
+where sampling profilers are refused.
+
+Observed on this machine (Xeon E5-2680 v3, rustc 1.99.1, perf 7.3.1,
+`perf_event_paranoid=2`), 10 runs of a deterministic 20M-iteration xorshift
+loop built with `rustc -O`:
+
+```bash
+for i in $(seq 10); do
+  LC_ALL=C perf stat -x, -e instructions:u,cycles:u,task-clock:u -- ./work >/dev/null 2>s.txt
+  awk -F, '{printf "%s ", $1} END{print ""}' s.txt
+done
+```
+
+| metric | min | max | (max − min) / mean |
+|---|---|---|---|
+| `instructions:u` | 340 369 684 | 340 370 780 | 0.00032 % |
+| `cycles:u` | 140 154 733 | 171 218 401 | 21.5 % |
+| `task-clock:u` (ms) | 50.35 | 62.66 | 23.5 % |
+
+One run in ten was ~20 % slower in cycles and time; the instruction count did
+not move. That is one small, register-bound binary on an idle box; a program
+with allocation, I/O or hash-seeded paths will vary more. Measure your own
+spread before trusting a threshold. (`LC_ALL=C` matters: in a locale with a
+decimal comma, `perf stat -x,` emits `52,45` and the CSV splits wrongly.)
+
+How:
+
+```bash
+# one-off, user-space only (works at perf_event_paranoid=2 here)
+perf stat -r 10 -e instructions:u,cycles:u,branches:u,branch-misses:u -- ./app input.bin
+
+# interleaved A/B with medians and spread (fork script)
+scripts/instr-count.sh --runs 15 --json instr.json -- './before input.bin' './after input.bin'
+```
+
+Simulated alternative: Callgrind (valgrind) counts instructions in a
+simulator, so it works without any PMU access and is close to deterministic;
+`iai-callgrind` wraps it for Rust benchmarks. Cost: tens of times slower than
+native, and the cache model is a simulation, not your CPU. **valgrind is not
+installed on this machine — not verified here.**
+
+Limits, stated bluntly:
+
+- **Instructions are not time.** A change can cut instructions and be slower:
+  more cache or TLB misses, more branch misses, a longer dependency chain,
+  `div` or gather instead of cheap ops, AVX frequency effects. SIMD often
+  cuts instructions *and* time; a lookup table can cut instructions and add
+  cache misses.
+- **Counts still vary**: ASLR and environment size shift stack alignment and
+  `memcpy` paths, allocator state changes code paths, hash seeds change probe
+  counts, and multi-threaded code retires spin and scheduling instructions.
+- **`:u` excludes the kernel.** Syscalls, page faults and I/O are invisible.
+  A change that moves work into the kernel (bigger reads, `mmap`) looks free.
+- `perf stat` covers the whole process, including startup and input parsing.
+  For a sub-millisecond function, wrap it in a loop of known count or use a
+  bench binary that does only that work.
+
+Rule: **instructions to detect and attribute, wall-clock to decide.** A KEEP
+needs the wall-clock (or criterion) result; an instruction delta without a
+time delta is reported as `fewer instructions, no measured speedup`.
+
+## 10. Layout bias: the 1–3 % that is not your change
+
+Moving code changes where functions, loops and the stack land relative to
+cache lines, pages, branch-predictor and µop-cache indexing. Effects of a few
+percent have been shown from link order and from the size of the UNIX
+environment alone (Mytkowicz, Diwan, Hauswirth, Sweeney, "Producing wrong
+data without doing anything obviously wrong!", ASPLOS 2009). Stabilizer
+re-randomizes code, stack and heap layout during a run so that a comparison
+averages over layouts instead of sampling one (Curtsinger & Berger,
+"STABILIZER: Statistically Sound Performance Evaluation", ASPLOS 2013).
+Stabilizer targets LLVM C/C++ toolchains of its era — not verified with Rust.
+
+So a 1–3 % delta from a patch is not yet evidence. Perturb the layout and see
+whether it survives:
+
+```bash
+# repeats the A/B under environment sizes; verdict stable | layout-sensitive
+scripts/layout-check.sh --runs 10 --pads "0 64 1024 4000" -- './before in.bin' './after in.bin'
+```
+
+By-hand perturbations (each one is a separate build of *both* sides, or of
+the baseline alone as a placebo):
+
+- a neutral edit: reorder two unrelated functions in the file;
+- change link order: the order of `mod` declarations, or of objects on the
+  link line. Confirm that the hot symbol actually moved with
+  `nm -n target/release/app | grep <symbol>` before and after. (Changing
+  `-C codegen-units` also moves code but changes inlining, so it is not a
+  neutral edit);
+- add an unrelated `#[inline(never)]` padding function that is called once
+  so it is not removed, which shifts every following symbol;
+- force a different function alignment for both sides:
+  `RUSTFLAGS='-C llvm-args=-align-all-functions=6'` (2^6 = 64 B) vs `=4`.
+  Observed here: in the §9 binary `nm -n` put `app::main` at `0x14c60` with
+  `=4` and at `0x14d40` with `=6`, so the flag does move code;
+- a placebo A/A: the baseline against itself rebuilt with one of the edits
+  above. If A/A shows a 2 % "effect", your floor is at least 2 %.
+
+Decision rule: **an effect that changes sign under layout perturbation is
+reported as `no effect`.** An effect whose sign holds but whose size swings
+is reported with the range across layouts, not the best layout.
+
+Observed here: the xorshift binary from §9 under `env PAD=<0|64|1024|4000
+bytes>` gave instruction counts within 340 369 829 – 340 370 711 and
+`cycles:u` within 140 494 741 – 140 821 144 (3 runs per pad). No layout effect
+was visible for that binary; this says nothing about yours.
+
+When it misleads: `layout-check.sh` only perturbs the environment (stack
+start) and times with hyperfine. It does not move code; a link-order or
+code-alignment artefact survives it, so combine it with the by-hand edits
+above. Treat `stable` as "not refuted", not "proven".
+
+## 11. Performance regressions in CI
+
+Shared cloud runners are noisy neighbours with unknown CPUs, frequency
+policies and co-tenants. What survives that:
+
+| Reliable on shared runners | Not reliable on shared runners |
+|---|---|
+| benchmarks compile and smoke-run (`cargo test --benches` runs each criterion bench once as a test) | wall-clock thresholds of 1–5 % |
+| instruction counts (`perf stat -e instructions:u`, if the runner permits PMU access — many VMs do not) | comparing to a baseline measured on another runner, day or CPU model |
+| simulated counts (Callgrind / `iai-callgrind`), which need no PMU | a single run deciding pass/fail |
+| large regressions (2× and up) as a coarse alarm | criterion's printed `change` across sessions (§3) |
+
+Minimal policy:
+
+1. Store a baseline from the target branch: the per-benchmark instruction
+   counts (or simulated counts) as a CI artefact, together with `rustc -Vv`,
+   the runner CPU model and the commit.
+2. Compare the PR against a baseline measured **in the same job** when you
+   can (build both commits, interleave), not against last week's artefact.
+3. Threshold above the measured A/A spread of that runner, not a guess.
+4. On a breach, re-run the A/B before failing; fail only if the breach
+   repeats with the same sign.
+5. Wall-clock benchmarks that decide KEEP/DISCARD belong on a dedicated,
+   quiet machine (as the harness does locally), not on shared runners.
+
+Fork addition: the harness's `eval --json` reports per-benchmark deltas (name,
+medians, `pct_change`, `p`, and the Bonferroni threshold) on KEEP and DISCARD,
+not only the overall verdict, so a CI job can store and diff them without
+re-parsing criterion's files. Verified with
+`cargo test --test cmd_eval -- --ignored` (4 passed).
+
+Criterion 0.8.2 (the version pinned in `docs/rust_perf_case/Cargo.lock`)
+supports named baselines; confirmed with `cargo bench --bench select_active
+-- --help` there:
+
+```bash
+cargo bench -- --save-baseline main      # on the target branch
+cargo bench -- --baseline main           # on the PR; fails if a bench lacks the baseline
+cargo test --benches                     # smoke-run: each bench once, no timing
+```
+
+`--baseline` compares wall-clock, so it inherits every limit of the right
+column above when run on a shared runner.

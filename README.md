@@ -20,7 +20,8 @@ live inside the files being changed, and where **correctness is not
 optional**.
 
 > **Status: early but working.** This release is proven by its own test
-> suite — 275+ tests, including end-to-end tests that drive `eval` to a real
+> suite — 307 tests in this fork (303 by default plus four `--ignored`
+> end-to-end benchmark tests), including tests that drive `eval` to a real
 > `KEEP` and a real `DISCARD` against the bundled demo crate — by one real
 > measured run against that crate, recorded in full in
 > [the case study](docs/case-study.md): a quadratic `String` rebuild replaced
@@ -440,6 +441,7 @@ An agent optimizing your code can "win" by cheating. Each route is closed:
 | Hide a locked-file edit from the check above by having it fall outside what `git diff`/`git status` report (a repository, or config, that gitignores `Cargo.lock`; an agent editing an in-scope `.gitignore` to add `.cargo/` before creating `.cargo/config.toml`) | every locked path present at baseline is hashed by statting the filesystem directly, independent of git; `eval` recomputes the same hashes and any addition, removal or change is `FAIL(scope_violation)` regardless of what git considers "changed" |
 | Bank measurement noise as a win | a Mann-Whitney test must clear `p < 0.05`; noise is `DISCARD` |
 | Speed up A by wrecking B | any significant regression over 5 % rejects the change outright |
+| Buy speed with new or changed `unsafe` | `unsafe` regions are token-scanned against the baseline; introducing or changing one is `FAIL(unsafe_added)` before the build. Removing or moving unchanged `unsafe` is allowed |
 | Loosen the rules mid-run (raise `max_regress_pct`, narrow `scope`, drop a benchmark) | `.autor3search/config.yaml` is hashed at baseline; any change to it fails the run with a config-hash mismatch |
 | Tamper with the pinned baseline worktree directly (make the *baseline* slower, rather than the candidate faster) | detected when its `HEAD` no longer matches the recorded measurement commit — `FAIL(baseline_tampered)`. **This is detection, not prevention, and it is partial**: the state directory is outside the repo, but the agent runs as the same OS user, so nothing stops it editing the worktree in place — it is only caught if `HEAD` moves |
 | Rewrite the frozen store (the golden copies `restore` reads from, so every later `eval` restores the tampered copy instead of the real one) | detected via the manifest hash recorded at baseline — `FAIL(frozen_store_tampered)`. Unrecoverable for that run, since the reference copy is the thing that was lost; start a fresh run with a new tag |
@@ -450,9 +452,12 @@ That last one matters more than it looks. Comparing a candidate measured now
 against a baseline measured an hour ago on a cooler CPU attributes thermal
 drift to your code change. Alternating both sides in one session cancels it.
 
-One cheat is deliberately **not** in this table. See
-[Limitations](#limitations) — `unsafe` is not gated in this release, and a
-reader deserves to know that before pointing an unattended loop at their code.
+`unsafe` is gated in this fork, but narrowly. The gate scans the candidate diff
+for `unsafe` regions, ignores comments and strings, and examines macro bodies;
+any introduced or changed `unsafe` block fails with `FAIL(unsafe_added)` before
+the build. What it cannot see is a *safe* edit that breaks the invariant of an
+existing `unsafe` region, or `unsafe` introduced by a dependency or proc macro.
+Upstream has no such gate.
 
 ## Scoring
 
@@ -633,31 +638,52 @@ None of these is cosmetic, and none of them is going to change soon.
   snapshotted or restored, even though `build`/`test`/`measure` all run
   `--workspace` and so do exercise it. If your `scope` reaches into a
   member crate, its integration tests are not frozen the way the root's are.
-- **An agent can still buy speed with `unsafe`, and this release does not
-  stop it.** `get_unchecked` in place of indexing is the cheapest fake win
-  available in Rust: it is genuinely faster, it passes every test that
-  exercises only the inputs the test suite happens to cover, and it trades
-  that speed for undefined behaviour on any input the tests do not. There is
-  **no gate against introducing `unsafe`** in this version. If you point
-  this tool at a repository unattended overnight, an agent hunting for a
-  faster number can and eventually will reach for `unsafe`, and nothing here
-  will stop it or even flag it. `allow_unsafe: false` — failing an
-  experiment whose diff introduces `unsafe` blocks not present at
-  baseline — is the first v2 candidate, tracked as such rather than shipped
-  half-done. Until it exists, review every kept diff for `unsafe` yourself.
+- **`unsafe` is gated, but narrowly.** This fork fails any experiment whose
+  diff adds or changes an `unsafe` region relative to baseline with
+  `FAIL(unsafe_added)`. Removing or relocating existing, unchanged `unsafe`
+  code is allowed; comments and strings are ignored, and macro bodies are
+  scanned. What the gate cannot see is a *safe* edit that breaks the invariant
+  of an existing `unsafe` region, or `unsafe` introduced by a dependency or
+  proc macro. Upstream has no such gate. Set `allow_unsafe: true` in
+  `.autor3search/config.yaml` to disable the gate (human-only; default
+  `false`).
 - **The baseline worktree compiles from cold on a run's first `eval`.** The
   pinned worktree has no warm `target/` the first time it is measured
   against, so the first experiment of a run pays a full release build on
   the baseline side that later experiments do not.
+
+### Fork changes
+
+This branch is a fork. In addition to the upstream harness, it adds:
+
+- **`unsafe` gate.** Before building, `eval` token-scans the candidate diff
+  for added or changed `unsafe` regions relative to the baseline commit; any
+  hit fails with `FAIL(unsafe_added)`. The `allow_unsafe` config field
+  (default `false`) disables it. Macro bodies are scanned; comments and
+  strings are ignored.
+- **Per-benchmark rows in `eval --json`.** When measurement runs (`KEEP` or
+  `DISCARD`), the JSON object includes a `benchmarks` array (name,
+  `base_ns`, `cand_ns`, `pct_change`, `p`, `significant`,
+  `keep_threshold_p`, `n_base`, `n_cand`).
+- **New scripts** in `scripts/`: `instr-count.sh`, `layout-check.sh`,
+  `vec-remarks.sh`, `perf-diff.sh`, `diff-fuzz.sh` (pre-existing:
+  `bench-ab.sh`, `perf-report.sh`, `asm-report.sh`).
+- **Install from this checkout** with `cargo install --path .`;
+  `cargo install autor3search-rust` installs upstream 0.2.1 without these
+  changes.
+
+See [`docs/fork-notes.md`](docs/fork-notes.md) for the full change table and
+skill details.
 
 ### Validation status, stated exactly
 
 Three things back this tool, and it is worth being precise about what each
 one does and does not establish.
 
-**Its own test suite** — 275+ tests, including end-to-end tests that drive
-`eval` to a real `KEEP` and a real `DISCARD` against the bundled
-`testdata/demo` crate.
+**Its own test suite** — 307 tests in this fork (303 by default plus four
+`--ignored` end-to-end benchmark tests, counted with
+`cargo test --all-targets -- --list`), including tests that drive `eval` to a
+real `KEEP` and a real `DISCARD` against the bundled `testdata/demo` crate.
 
 **One real measured run against that demo crate**, recorded in
 [the case study](docs/case-study.md) and in the
