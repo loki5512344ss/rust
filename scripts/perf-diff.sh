@@ -50,7 +50,7 @@ while (( $# )); do
   esac
 done
 
-[[ "$FREQ" =~ ^[0-9]+$ ]] && [[ "$FREQ" != 0* ]] || die "--freq must be a positive integer"
+if ! [[ "$FREQ" =~ ^[0-9]+$ && "$FREQ" != 0* ]]; then die "--freq must be a positive integer"; fi
 (( FREQ <= 100000 )) || die "--freq above 100000 is not accepted by most kernels"
 (( $# == 2 )) || die "need exactly two commands after -- (got $#)"
 CMD_A=$1
