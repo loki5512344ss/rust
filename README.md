@@ -1,6 +1,6 @@
 # rustperf
 
-[![ci](https://github.com/loki5512344ss/rust/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/loki5512344ss/rust/actions/workflows/ci.yml?query=branch%3Amain)
+[![ci](https://github.com/loki5512344ss/rustperf/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/loki5512344ss/rustperf/actions/workflows/ci.yml?query=branch%3Amain)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Independent fork of [autor3search/rust](https://github.com/autor3search/rust) (MIT, original author credited in `LICENSE` and `Cargo.toml`), developed separately: an `unsafe` gate, per-benchmark deltas, measurement scripts and an extended skill. Not published on crates.io; install from this repository.
@@ -38,7 +38,7 @@ optional**.
 > illustration.
 >
 > What version you get, and what changed in it, is on the
-> [releases page](https://github.com/loki5512344ss/rust/releases) — this
+> [releases page](https://github.com/loki5512344ss/rustperf/releases) — this
 > README describes the current one.
 
 ---
@@ -54,7 +54,7 @@ Install and run rustperf on this repository, then optimize it.
 Setup:
 0. Run git status. If the working tree has changes, STOP and ask me to
    commit or stash them first.
-1. cargo install --locked --git https://github.com/loki5512344ss/rust
+1. cargo install --locked --git https://github.com/loki5512344ss/rustperf
    Make sure ~/.cargo/bin is on PATH.
 2. rustperf init
    Show me the benchmarks it discovered. If it reports none, STOP and tell
@@ -110,7 +110,7 @@ agent to make the repository faster; it loads the prompt itself.
 
 ```sh
 mkdir -p ~/.claude/skills/rustperf
-curl -fsSL https://raw.githubusercontent.com/loki5512344ss/rust/main/skills/rustperf/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/loki5512344ss/rustperf/main/skills/rustperf/SKILL.md \
   -o ~/.claude/skills/rustperf/SKILL.md
 ```
 
@@ -156,7 +156,7 @@ without also erasing whatever real optimization sits next to them — see
 ## Quick start
 
 ```bash
-cargo install --locked --git https://github.com/loki5512344ss/rust
+cargo install --locked --git https://github.com/loki5512344ss/rustperf
 
 cd your-rust-project
 rustperf init                                # find benchmarks, write config + program.md
@@ -667,7 +667,7 @@ This branch is a fork. In addition to the upstream harness, it adds:
 - **New scripts** in `scripts/`: `instr-count.sh`, `layout-check.sh`,
   `vec-remarks.sh`, `perf-diff.sh`, `diff-fuzz.sh` (pre-existing:
   `bench-ab.sh`, `perf-report.sh`, `asm-report.sh`).
-- **Install** with `cargo install --locked --git https://github.com/loki5512344ss/rust`
+- **Install** with `cargo install --locked --git https://github.com/loki5512344ss/rustperf`
   or, from a checkout, `cargo install --path .`. The crate is named
   `rustperf`; upstream's `autor3search-rust` on crates.io is a different
   program without these changes.

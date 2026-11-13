@@ -210,7 +210,7 @@ Catalog with "when it hurts": `references/optimization-catalog.md`.
 ## Phase 5 — the rustperf loop (only when asked / repo has benches)
 
 ```bash
-cargo install --locked --git https://github.com/loki5512344ss/rust   # this fork: unsafe gate, per-benchmark JSON
+cargo install --locked --git https://github.com/loki5512344ss/rustperf   # this fork: unsafe gate, per-benchmark JSON
 # or from a checkout:  cargo install --locked --path <checkout>
 git status                                  # must be clean
 rustperf init                      # shows discovered benchmarks

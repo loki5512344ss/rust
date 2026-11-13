@@ -1,6 +1,6 @@
 # Fork notes
 
-This fork (`loki5512344ss/rust`) adds a much larger, self-contained agent skill
+This fork (`loki5512344ss/rustperf`) adds a much larger, self-contained agent skill
 and a Russian reference guide, and — since 2026-11-12 — two changes to the
 harness itself (see "Harness changes"). The
 goal is one workflow: **measure → localize in a profile → explain in asm →
