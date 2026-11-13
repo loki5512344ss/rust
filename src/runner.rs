@@ -300,11 +300,11 @@ mod tests {
 
     #[test]
     fn env_overrides_reach_the_child() {
-        let r = runner(Duration::from_secs(60)).with_env("AUTOR3SEARCH_PROBE", "yes");
+        let r = runner(Duration::from_secs(60)).with_env("RUSTPERF_PROBE", "yes");
         assert!(
             r.env
                 .iter()
-                .any(|(k, v)| k == "AUTOR3SEARCH_PROBE" && v == "yes")
+                .any(|(k, v)| k == "RUSTPERF_PROBE" && v == "yes")
         );
     }
 

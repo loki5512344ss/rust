@@ -1,6 +1,6 @@
 mod common;
-use autor3search::results::{self, Row};
 use common::TestRepo;
+use rustperf_core::results::{self, Row};
 
 fn row(status: &str, score: f64) -> Row {
     Row {

@@ -1,5 +1,5 @@
 use crate::args::Args;
-use autor3search::{config, discover, freeze, gitx, results, scope, state};
+use rustperf_core::{config, discover, freeze, gitx, results, scope, state};
 use std::path::Path;
 
 pub fn run(argv: &[String]) -> i32 {
@@ -7,7 +7,7 @@ pub fn run(argv: &[String]) -> i32 {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
-            return autor3search::EXIT_USAGE;
+            return rustperf_core::EXIT_USAGE;
         }
     };
     match baseline(&args) {
@@ -32,7 +32,7 @@ fn baseline(args: &Args) -> Result<String, String> {
     let cfg_path = root.join(config::CONFIG_PATH);
     if !cfg_path.exists() {
         return Err(format!(
-            "no {} — run 'autor3search-rust init' first",
+            "no {} — run 'rustperf init' first",
             config::CONFIG_PATH
         ));
     }
@@ -43,7 +43,7 @@ fn baseline(args: &Args) -> Result<String, String> {
     if !gitx::is_clean(&root)? {
         return Err(
             "the working tree has uncommitted changes — commit them first:\n    \
-             git add -A && git commit -m \"autor3search-rust init\"\n\nA baseline pinned \
+             git add -A && git commit -m \"rustperf init\"\n\nA baseline pinned \
              against what is on disk rather than what is in git would not be reproducible."
                 .to_string(),
         );

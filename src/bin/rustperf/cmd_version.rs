@@ -12,20 +12,17 @@ use crate::args::Args;
 /// `git describe --always --dirty --abbrev=7`, recorded by `build.rs` at
 /// compile time. `"unknown"` when the build was not run inside a git
 /// checkout (e.g. from a source tarball).
-const GIT_COMMIT: &str = env!("AUTOR3SEARCH_GIT_COMMIT");
+const GIT_COMMIT: &str = env!("RUSTPERF_GIT_COMMIT");
 
 pub fn run(argv: &[String]) -> i32 {
     let args = match Args::parse(argv, &[]) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
-            return autor3search::EXIT_USAGE;
+            return rustperf_core::EXIT_USAGE;
         }
     };
     let _ = args; // no flags accepted; parsed only to reject unknown ones
-    println!(
-        "autor3search-rust {} ({GIT_COMMIT})",
-        env!("CARGO_PKG_VERSION")
-    );
+    println!("rustperf {} ({GIT_COMMIT})", env!("CARGO_PKG_VERSION"));
     0
 }

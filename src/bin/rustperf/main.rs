@@ -39,8 +39,8 @@ const COMMANDS: &[(&str, &str)] = &[
 ];
 
 fn usage() {
-    eprintln!("autor3search-rust — autonomous Rust performance optimization harness");
-    eprintln!("\nusage: autor3search-rust <command> [flags]\n\ncommands:");
+    eprintln!("rustperf — autonomous Rust performance optimization harness");
+    eprintln!("\nusage: rustperf <command> [flags]\n\ncommands:");
     for (name, summary) in COMMANDS {
         eprintln!("  {name:<9} {summary}");
     }
@@ -49,12 +49,12 @@ fn usage() {
 fn dispatch(args: &[String]) -> i32 {
     let Some(name) = args.first() else {
         usage();
-        return autor3search::EXIT_USAGE;
+        return rustperf_core::EXIT_USAGE;
     };
     if !COMMANDS.iter().any(|(c, _)| c == name) {
         eprintln!("unknown command {name:?}\n");
         usage();
-        return autor3search::EXIT_USAGE;
+        return rustperf_core::EXIT_USAGE;
     }
     let rest = &args[1..];
     match name.as_str() {
@@ -69,7 +69,7 @@ fn dispatch(args: &[String]) -> i32 {
         "version" => cmd_version::run(rest),
         _ => {
             eprintln!("{name}: not implemented yet");
-            autor3search::EXIT_USAGE
+            rustperf_core::EXIT_USAGE
         }
     }
 }

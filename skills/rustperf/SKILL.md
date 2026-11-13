@@ -1,9 +1,9 @@
 ---
-name: autor3search-rust
-description: Use when asked to make a Rust crate faster, optimize or tune Rust performance, fix a slow function or hot loop, reduce allocations/latency/binary size, read x86-64 asm or LLVM IR to explain a regression, benchmark with criterion or hyperfine, profile with perf or samply, experiment with several rewrites of the same code and log the proven method, or run an autor3search-rust KEEP/DISCARD optimization loop. Triggers include "ускорить", "оптимизировать Rust", "тормозит", "почему медленно", "поэкспериментируй с оптимизацией", "cargo asm", "perf annotate".
+name: rustperf
+description: Use when asked to make a Rust crate faster, optimize or tune Rust performance, fix a slow function or hot loop, reduce allocations/latency/binary size, read x86-64 asm or LLVM IR to explain a regression, benchmark with criterion or hyperfine, profile with perf or samply, experiment with several rewrites of the same code and log the proven method, or run an rustperf KEEP/DISCARD optimization loop. Triggers include "ускорить", "оптимизировать Rust", "тормозит", "почему медленно", "поэкспериментируй с оптимизацией", "cargo asm", "perf annotate".
 ---
 
-# autor3search-rust: measure, diagnose, patch, prove
+# rustperf: measure, diagnose, patch, prove
 
 The harness measures; you propose. One hypothesis, one minimal patch, one
 measurement, one verdict. A number without a command that produced it is a
@@ -32,7 +32,7 @@ costs and applicability conditions — or an honest "nothing beat the noise".
 2. **One idea per experiment.** A diff that changes two things cannot be
    attributed; if the number moves, you do not know why.
 3. **Never fake the score.** Do not edit `tests/**`, `benches/**`, inline
-   `#[cfg(test)]` blocks, doctests, `program.md`, `.autor3search/config.yaml`,
+   `#[cfg(test)]` blocks, doctests, `program.md`, `.rustperf/config.yaml`,
    or `results.tsv`. The harness restores or fails these; a "win" obtained by
    weakening the judge is fraud.
 4. **Semantic contract first.** Before touching code, write down what must
@@ -90,7 +90,7 @@ Read `references/measurement.md` before trusting a number: warmup, ABBA
 ordering, thermal drift, `black_box`, and the fact that a microbenchmark is
 not your application.
 
-**The harness only reads criterion.** `autor3search-rust eval` shells out to
+**The harness only reads criterion.** `rustperf eval` shells out to
 `cargo bench` with a criterion filter; it cannot consume a `hyperfine` result,
 a `time` output, or a custom harness. So:
 
@@ -207,16 +207,16 @@ one.
 
 Catalog with "when it hurts": `references/optimization-catalog.md`.
 
-## Phase 5 — the autor3search-rust loop (only when asked / repo has benches)
+## Phase 5 — the rustperf loop (only when asked / repo has benches)
 
 ```bash
-cargo install --locked autor3search-rust    # upstream: no unsafe gate, no per-benchmark JSON
-# or, for this fork's harness:  cargo install --locked --path <checkout of the fork>
+cargo install --locked --git https://github.com/loki5512344ss/rust   # this fork: unsafe gate, per-benchmark JSON
+# or from a checkout:  cargo install --locked --path <checkout>
 git status                                  # must be clean
-autor3search-rust init                      # shows discovered benchmarks
-git add -A && git commit -m "autor3search-rust init"
-autor3search-rust doctor                    # machine fit to measure?
-autor3search-rust baseline --tag "$(date +%b%d)"
+rustperf init                      # shows discovered benchmarks
+git add -A && git commit -m "rustperf init"
+rustperf doctor                    # machine fit to measure?
+rustperf baseline --tag "$(date +%b%d)"
 # then follow program.md exactly, verbatim, to the end
 ```
 
@@ -231,7 +231,7 @@ Non-negotiables from the harness contract:
   else means `git reset --hard HEAD~1`.
 - `eval --json` prints one JSON object and nothing else. Do not wrap it in
   other output.
-- `stop_requested: true` → apply that verdict, run `autor3search-rust report`,
+- `stop_requested: true` → apply that verdict, run `rustperf report`,
   summarize, exit the loop. Never start another experiment.
 - Never pass `--force` to any command. The human owns `stop --force`.
 - Never edit files the harness owns (`program.md`, config, `results.tsv`, run
@@ -293,7 +293,7 @@ DECISION       keep / revert / unknown, and why
 | `references/asm-reading.md` | you must explain *why* code is slow from machine code |
 | `references/measurement.md` | designing or trusting a benchmark; hyperfine/criterion/perf stat |
 | `references/profiling.md` | perf record/report/annotate, samply, flamegraphs, cache/contention counters |
-| `references/harness-cli.md` | driving autor3search-rust: commands, config, verdicts, scoring |
+| `references/harness-cli.md` | driving rustperf: commands, config, verdicts, scoring |
 | `references/optimization-catalog.md` | choosing what to try, with "when it hurts" |
 | `references/semantics-traps.md` | before any change that touches behavior, floats, ordering, threads |
 | `references/diagnostics.md` | symptom → instrument → likely cause lookup |

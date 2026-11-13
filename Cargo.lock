@@ -3,25 +3,6 @@
 version = 4
 
 [[package]]
-name = "autor3search-rust"
-version = "0.2.1"
-dependencies = [
- "dirs",
- "glob",
- "libc",
- "proc-macro2",
- "quote",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "syn 2.0.119",
- "tempfile",
- "toml",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "bitflags"
 version = "2.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -259,6 +240,25 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "rustperf"
+version = "0.3.0"
+dependencies = [
+ "dirs",
+ "glob",
+ "libc",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "syn 2.0.119",
+ "tempfile",
+ "toml",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

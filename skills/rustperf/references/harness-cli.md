@@ -1,4 +1,4 @@
-# autor3search-rust: driving the harness (verified against source, v0.2.1)
+# rustperf: driving the harness (verified against source, v0.3.0)
 
 Everything below was checked against `src/` in the fork, not copied from the
 README. Where README and code disagree, this file follows the code and says so.
@@ -7,7 +7,7 @@ README. Where README and code disagree, this file follows the code and says so.
 
 | Command | Flags | Does |
 |---|---|---|
-| `init` | `-C`, `--force` | discovers criterion benches, writes `.autor3search/config.yaml` + `program.md`, gitignores run artifacts |
+| `init` | `-C`, `--force` | discovers criterion benches, writes `.rustperf/config.yaml` + `program.md`, gitignores run artifacts |
 | `doctor` | `-C` | machine fitness report; **always exits 0**, gates nothing |
 | `baseline --tag <t>` | `-C`, `--tag`, `--force` | creates run branch, freezes `tests/**`+`benches/**`, hashes inline tests + locked files, pins measurement worktree |
 | `eval` | `-C`, `--json`, `--desc <text>`, `--no-log` | one experiment: gates → build → test → measure → verdict → one `results.tsv` row |
@@ -35,7 +35,7 @@ accepted by every command.
 `2` is overloaded: a gate failure writes a row, a harness malfunction writes
 none. Distinguish by whether a new `results.tsv` row appeared.
 
-## 3. `.autor3search/config.yaml`
+## 3. `.rustperf/config.yaml`
 
 `deny_unknown_fields` — a typo'd key is a hard error. All keys optional.
 
@@ -97,7 +97,7 @@ never the agent's to edit, even though it lives in the repo.
   "stop_requested": false,
   "run": {
     "tag": "sep6",
-    "branch": "autor3search-rust/sep6",
+    "branch": "rustperf/sep6",
     "baseline_commit": "a3f1c2d",
     "measure_commit": "9b7e410",
     "worktree": "/…/baseline-worktree",
@@ -157,8 +157,8 @@ whitespace-flattened and truncated to 256 chars. Written by `eval` only,
 ## 8. State location
 
 `<state_home>/<sha256(canonical repo path)[0..16]>/<tag>/` where
-`<state_home>` = `$AUTOR3SEARCH_RUST_STATE_HOME` (must be absolute) or
-`~/.cache/autor3search-rust`. Holds `baseline.json`, `baseline-worktree/`,
+`<state_home>` = `$RUSTPERF_STATE_HOME` (must be absolute) or
+`~/.cache/rustperf`. Holds `baseline.json`, `baseline-worktree/`,
 `frozen/` + manifest, per-round criterion homes, profiles, `stop`, `eval.pid`.
 
 The key is derivable from the repo path, so "outside the repo" is not
@@ -217,13 +217,13 @@ Do not touch it. A human may set the env var for containers.
 - Always pass `--desc "<idea>"`.
 - Do not redirect/tee stdout of `eval --json`; it prints one JSON object.
 - Print the context line before each experiment:
-  `[exp <n> | <branch> | vs <measure_commit> | stop: autor3search-rust stop]`
+  `[exp <n> | <branch> | vs <measure_commit> | stop: rustperf stop]`
 - `stop_requested: true` or `ABORTED` → apply the verdict, run `report`,
   summarize, exit the loop.
-- Never edit `program.md`, `.autor3search/config.yaml`, `results.tsv`, or run
+- Never edit `program.md`, `.rustperf/config.yaml`, `results.tsv`, or run
   state; never pass `--force` to any command.
 - Do not stop on your own: running out of ideas is not a stop condition. The
-  human stops with `autor3search-rust stop`.
+  human stops with `rustperf stop`.
 
 ## 12. Known README/code discrepancies (do not trust the README here)
 

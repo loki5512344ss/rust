@@ -11,7 +11,7 @@
 # The harness freezes tests/** at `baseline`; a file dropped there after that
 # is restored away or flagged, and writing there mid-run edits a gate input.
 # So the default is a scratch directory outside tests/, and a tests/ directory
-# under an autor3search run is refused unless --force-tests-dir is given.
+# under a rustperf run is refused unless --force-tests-dir is given.
 
 set -euo pipefail
 
@@ -38,7 +38,7 @@ Required:
 Options:
   --iters N          random cases in the random_cases test (default: 20000)
   --force-tests-dir  allow writing into a tests/ directory that belongs to an
-                     autor3search run (detected by .autor3search/config.yaml in
+                     rustperf run (detected by .rustperf/config.yaml in
                      a parent directory). Only before `baseline`, or accept
                      that the harness will treat the file as frozen/changed.
   -h, --help         show this help
@@ -93,7 +93,7 @@ fi
 # Resolve without requiring DIR to exist yet.
 ABS_OUT=$(realpath -m -- "$OUT")
 
-# A `tests` path component under a directory tree that has an autor3search
+# A `tests` path component under a directory tree that has a rustperf
 # config means this would land in files the harness freezes.
 in_tests=0
 IFS=/ read -r -a PARTS <<<"$ABS_OUT"
@@ -103,15 +103,15 @@ done
 if (( in_tests )); then
   d=$ABS_OUT
   while [[ "$d" != / ]]; do
-    if [[ -f "$d/.autor3search/config.yaml" ]]; then
+    if [[ -f "$d/.rustperf/config.yaml" ]]; then
       if (( ! FORCE )); then
         printf 'diff-fuzz.sh: refusing to write into %s\n' "$ABS_OUT" >&2
-        printf '  %s has .autor3search/config.yaml, so tests/** is frozen by baseline:\n' "$d" >&2
+        printf '  %s has .rustperf/config.yaml, so tests/** is frozen by baseline:\n' "$d" >&2
         printf '  a new file there changes a gate input mid-run. Write to a scratch directory\n' >&2
         printf '  and copy the file in before baseline, or pass --force-tests-dir.\n' >&2
         exit 1
       fi
-      printf 'warning: --force-tests-dir: writing into a tests/ directory of an autor3search run (%s)\n' "$d" >&2
+      printf 'warning: --force-tests-dir: writing into a tests/ directory of a rustperf run (%s)\n' "$d" >&2
       break
     fi
     d=$(dirname -- "$d")

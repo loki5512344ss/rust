@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the autor3search-rust skill into every local agent harness.
+# Install the rustperf skill into every local agent harness.
 #
 #   bash scripts/install-skill.sh            # copy (safe default)
 #   bash scripts/install-skill.sh --link     # symlink to this checkout
@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-SKILL_NAME="autor3search-rust"
+SKILL_NAME="rustperf"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/skills/${SKILL_NAME}"
 
 if [[ ! -f "${SRC}/SKILL.md" ]]; then

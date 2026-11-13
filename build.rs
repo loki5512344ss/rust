@@ -8,7 +8,7 @@ fn main() {
     let commit = vcs_info_commit(Path::new(&manifest_dir))
         .or_else(git_describe)
         .unwrap_or_else(|| "unknown".to_string());
-    println!("cargo:rustc-env=AUTOR3SEARCH_GIT_COMMIT={commit}");
+    println!("cargo:rustc-env=RUSTPERF_GIT_COMMIT={commit}");
 }
 
 /// The commit cargo recorded when it packaged this crate.

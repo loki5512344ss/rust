@@ -14,7 +14,7 @@
 //! intact.
 //!
 //! On unix, `--force` sends a real `SIGTERM` to a verified-LIVE `eval`
-//! process (see `autor3search::state::eval_running`, which tells a live
+//! process (see `rustperf_core::state::eval_running`, which tells a live
 //! claim from a pid file a crashed eval left behind) and waits briefly for
 //! it to exit on its own — `eval`'s own signal handler sets
 //! `state::CANCEL_REQUESTED`, which the pipeline and `Runner::cargo` check
@@ -25,7 +25,7 @@
 //! never gets to record what it abandoned.
 
 use crate::args::Args;
-use autor3search::{gitx, state};
+use rustperf_core::{gitx, state};
 use std::path::Path;
 use std::time::Duration;
 
@@ -50,12 +50,12 @@ pub fn run(argv: &[String]) -> i32 {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
-            return autor3search::EXIT_USAGE;
+            return rustperf_core::EXIT_USAGE;
         }
     };
     if args.flag("clear") && args.flag("force") {
-        eprintln!("autor3search-rust stop: --clear and --force are opposites; pass one or neither");
-        return autor3search::EXIT_USAGE;
+        eprintln!("rustperf stop: --clear and --force are opposites; pass one or neither");
+        return rustperf_core::EXIT_USAGE;
     }
     match stop(&args) {
         Ok(msg) => {
@@ -79,7 +79,7 @@ fn resolve_tag(root: &Path, tag_flag: Option<&str>) -> Result<String, String> {
     let branch = gitx::current_branch(root)?;
     state::tag_from_branch(&branch).ok_or_else(|| {
         format!(
-            "current branch {branch:?} was not created by 'autor3search-rust baseline --tag \
+            "current branch {branch:?} was not created by 'rustperf baseline --tag \
              <tag>' — pass --tag <tag>, or check out the run branch first"
         )
     })
@@ -94,7 +94,7 @@ fn stop(args: &Args) -> Result<String, String> {
         state::clear_stop(&dir)?;
         return Ok(format!(
             "stop request cleared for run {tag:?}\nthe agent will keep experimenting; run \
-             `autor3search-rust stop` again to stop it\n"
+             `rustperf stop` again to stop it\n"
         ));
     }
 
@@ -105,7 +105,7 @@ fn stop(args: &Args) -> Result<String, String> {
     );
     if !args.flag("force") {
         out.push_str(
-            "to cancel:      autor3search-rust stop --clear\nto stop sooner: autor3search-rust \
+            "to cancel:      rustperf stop --clear\nto stop sooner: rustperf \
              stop --force\n",
         );
         return Ok(out);
@@ -149,7 +149,7 @@ fn force_signal(dir: &Path) -> String {
         } else {
             out.push_str(&format!(
                 "eval did not exit within {:?}; it may still be tearing down its benchmark \
-                 subprocess — check again with `autor3search-rust status`\n",
+                 subprocess — check again with `rustperf status`\n",
                 FORCE_GRACE
             ));
         }
@@ -236,7 +236,7 @@ fn repo_state(root: &Path) -> Result<String, String> {
     out.push_str(
         "\nif the agent had already committed the experiment it was running, that commit \
          carries no verdict. To drop it:  git reset --hard HEAD~1\nto resume this run later: \
-         autor3search-rust stop --clear\n",
+         rustperf stop --clear\n",
     );
     Ok(out)
 }

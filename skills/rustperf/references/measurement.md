@@ -174,7 +174,7 @@ but stays below the practical floor, the verdict is `unknown`, not `keep`.
 | two variants benchmarked sequentially in one process | allocator state from A biases B; run each in its own process or alternate order and check the distribution |
 
 **Allocator-state contamination is real and easy to miss.** A measured case
-(`docs/rust_perf_case/RESULTS.md` in the autor3search-rust repo) showed
+(`docs/rust_perf_case/RESULTS.md` in the rustperf repo) showed
 `with_capacity` at +60 % in criterion, because variant A ran first and changed
 the allocator state for variant B. A standalone interleaved test revealed a
 bimodal distribution: the second variant was ~50 % slower whenever it ran

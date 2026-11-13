@@ -1,15 +1,15 @@
 //! The `report` command: summarizes `results.tsv`.
 
 use crate::args::Args;
-use autor3search::gitx;
-use autor3search::results::{self, Row};
+use rustperf_core::gitx;
+use rustperf_core::results::{self, Row};
 
 pub fn run(argv: &[String]) -> i32 {
     let args = match Args::parse(argv, &[("C", true)]) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
-            return autor3search::EXIT_USAGE;
+            return rustperf_core::EXIT_USAGE;
         }
     };
     match report(&args) {
@@ -35,7 +35,7 @@ fn report(args: &Args) -> Result<String, String> {
 ///
 /// Each kept score is only that experiment's own incremental contribution,
 /// because `measure_commit` advances after every KEEP (see
-/// `autor3search::pipeline::advance_measurement_baseline`): every `eval`
+/// `rustperf_core::pipeline::advance_measurement_baseline`): every `eval`
 /// measures the candidate against the immediately preceding ACCEPTED state,
 /// never against the run's original commit. So the run-level figure has to
 /// be composed by multiplying every kept score together, the same way
@@ -43,7 +43,7 @@ fn report(args: &Args) -> Result<String, String> {
 /// alone would under-report every earlier kept experiment.
 fn format_report(rows: &[Row]) -> String {
     if rows.is_empty() {
-        return "autor3search-rust report: no experiments recorded\n".to_string();
+        return "rustperf report: no experiments recorded\n".to_string();
     }
 
     let mut keep = 0;
@@ -70,7 +70,7 @@ fn format_report(rows: &[Row]) -> String {
     }
 
     let mut out = format!(
-        "autor3search-rust report: {} experiment(s)  ({keep} keep, {discard} discard, {fail} \
+        "rustperf report: {} experiment(s)  ({keep} keep, {discard} discard, {fail} \
          fail, {crash} crash)\n\n",
         rows.len()
     );

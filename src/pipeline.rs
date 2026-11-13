@@ -226,7 +226,7 @@ pub fn eval(
                 Reason::ConfigChanged,
                 format!(
                     "{} changed since baseline — scoring rules are fixed for a run; revert it, \
-                     or start a new run with 'autor3search-rust baseline --tag <tag>'",
+                     or start a new run with 'rustperf baseline --tag <tag>'",
                     crate::config::CONFIG_PATH
                 ),
             ),
@@ -342,7 +342,7 @@ pub fn eval(
                     format!(
                         "{msg} — the frozen copy this run scores against was modified, so its \
                          tests can no longer be trusted. Start a fresh run with \
-                         'autor3search-rust baseline --tag <tag>'."
+                         'rustperf baseline --tag <tag>'."
                     ),
                 ),
                 None,
@@ -398,7 +398,7 @@ pub fn eval(
                 Reason::NewTestFile,
                 format!(
                     "test files not present at baseline: {added:?} — the benchmark set is \
-                     frozen; add them before running 'autor3search-rust baseline', or list \
+                     frozen; add them before running 'rustperf baseline', or list \
                      them in the config's unfreeze"
                 ),
             ),
@@ -500,7 +500,7 @@ pub fn eval(
                     "pinned baseline worktree HEAD is {worktree_head} but the recorded \
                      measurement commit is {} — the worktree no longer matches the baseline \
                      and this run's measurements cannot be trusted. Start a fresh run with \
-                     'autor3search-rust baseline --tag <tag>'.",
+                     'rustperf baseline --tag <tag>'.",
                     o.baseline.measure_commit
                 ),
             ),
@@ -655,7 +655,7 @@ mod tests {
             cfg: Config::default(),
             baseline: Baseline {
                 tag: "t".into(),
-                branch: "autor3search-rust/t".into(),
+                branch: "rustperf/t".into(),
                 commit: first.clone(),
                 measure_commit: first.clone(),
                 created_at: String::new(),

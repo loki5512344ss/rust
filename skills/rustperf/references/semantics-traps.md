@@ -235,7 +235,7 @@ scripts/diff-fuzz.sh --out <DIR> --old my_crate::old::count --new my_crate::coun
 # --sig: slice-u64 | slice-u8 | str — the input type both functions take
 # paths start with the LIBRARY name: in an integration test `crate::` is the test crate.
 # writes <DIR>/diff_fuzz.rs; a failure prints a DIFF_FUZZ_REPLAY=... command that reruns that one case.
-# refuses to write into tests/ of a repo under an autor3search run (tests/** is frozen at baseline).
+# refuses to write into tests/ of a repo under a rustperf run (tests/** is frozen at baseline).
 ```
 
 Read and adjust what it generates before trusting it: the input sizes must

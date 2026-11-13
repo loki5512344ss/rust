@@ -1,11 +1,11 @@
-//! Loads and validates the autor3search-rust run configuration.
+//! Loads and validates the rustperf run configuration.
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Duration;
 
 /// The config location relative to the repository root.
-pub const CONFIG_PATH: &str = ".autor3search/config.yaml";
+pub const CONFIG_PATH: &str = ".rustperf/config.yaml";
 
 /// The smallest `count` at which the exact Mann-Whitney test used by
 /// [`crate::stats`] can ever report p < 0.05, however large or clean the

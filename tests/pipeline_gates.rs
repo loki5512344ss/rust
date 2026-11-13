@@ -1,12 +1,12 @@
 //! Every gate in the eval pipeline, exercised through the library so a gate
 //! failure is attributable to the gate rather than to a process boundary.
 
-use autor3search::{config, freeze, pipeline, state, verdict};
+use rustperf_core::{config, freeze, pipeline, state, verdict};
 // `discover` and `gitx` are used only by
 // `a_repo_reached_through_a_symlinked_ancestor_is_not_tampering`, which is
 // itself `#[cfg(unix)]` (it relies on `std::os::unix::fs::symlink`).
 #[cfg(unix)]
-use autor3search::{discover, gitx};
+use rustperf_core::{discover, gitx};
 use std::path::Path;
 
 mod common;
@@ -16,7 +16,7 @@ use common::TestRepo;
 ///
 /// The state directory is located by walking `repo`'s own state home
 /// (`common::state_dir`) rather than by calling `state::state_dir` directly
-/// in-process: that function reads `AUTOR3SEARCH_RUST_STATE_HOME` from the
+/// in-process: that function reads `RUSTPERF_STATE_HOME` from the
 /// current process's environment, which is only ever set for the *child*
 /// process `run_cli` spawns, and is a global these tests must not race on.
 fn ready(repo: &TestRepo) -> (config::Config, state::Baseline, std::path::PathBuf) {
@@ -206,7 +206,7 @@ fn a_repo_reached_through_a_symlinked_ancestor_is_not_tampering() {
     std::os::unix::fs::symlink(&real, &link).unwrap();
     let root = link.join("repo"); // deliberately NOT canonicalized
 
-    std::fs::create_dir_all(root.join(".autor3search")).unwrap();
+    std::fs::create_dir_all(root.join(".rustperf")).unwrap();
     common::git(&root, &["init", "-q", "-b", "main"]);
     common::git(&root, &["config", "user.name", "Test"]);
     common::git(&root, &["config", "user.email", "test@example.com"]);
@@ -226,7 +226,7 @@ fn a_repo_reached_through_a_symlinked_ancestor_is_not_tampering() {
     let locked_files = discover::locked_files(&root).unwrap();
     let base = state::Baseline {
         tag: "t1".into(),
-        branch: "autor3search-rust/t1".into(),
+        branch: "rustperf/t1".into(),
         commit: commit.clone(),
         measure_commit: commit,
         created_at: String::new(),

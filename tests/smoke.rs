@@ -1,7 +1,7 @@
 use std::process::Command;
 
 fn bin() -> &'static str {
-    env!("CARGO_BIN_EXE_autor3search-rust")
+    env!("CARGO_BIN_EXE_rustperf")
 }
 
 #[test]

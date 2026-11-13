@@ -2,7 +2,7 @@
 //! its shape is asserted here rather than assumed. A change that breaks it
 //! would otherwise surface as a confusing failure five tasks away.
 
-use autor3search::discover;
+use rustperf_core::discover;
 use std::path::PathBuf;
 
 fn demo() -> PathBuf {

@@ -415,10 +415,10 @@ mod tests {
     #[test]
     fn branches_are_created_and_detected() {
         let r = repo();
-        assert!(!branch_exists(&r.root, "autor3search-rust/t1").unwrap());
-        create_and_checkout_branch(&r.root, "autor3search-rust/t1").unwrap();
-        assert!(branch_exists(&r.root, "autor3search-rust/t1").unwrap());
-        assert_eq!(current_branch(&r.root).unwrap(), "autor3search-rust/t1");
+        assert!(!branch_exists(&r.root, "rustperf/t1").unwrap());
+        create_and_checkout_branch(&r.root, "rustperf/t1").unwrap();
+        assert!(branch_exists(&r.root, "rustperf/t1").unwrap());
+        assert_eq!(current_branch(&r.root).unwrap(), "rustperf/t1");
     }
 
     // Rollback needs to leave a repository exactly as it found it: checked
@@ -428,7 +428,7 @@ mod tests {
     #[test]
     fn a_branch_can_be_checked_out_away_from_and_then_force_deleted() {
         let r = repo();
-        create_and_checkout_branch(&r.root, "autor3search-rust/t1").unwrap();
+        create_and_checkout_branch(&r.root, "rustperf/t1").unwrap();
         fs::write(r.root.join("a.txt"), "two\n").unwrap();
         git(
             &r.root,
@@ -438,8 +438,8 @@ mod tests {
         checkout_branch(&r.root, "main").unwrap();
         assert_eq!(current_branch(&r.root).unwrap(), "main");
 
-        delete_branch(&r.root, "autor3search-rust/t1").unwrap();
-        assert!(!branch_exists(&r.root, "autor3search-rust/t1").unwrap());
+        delete_branch(&r.root, "rustperf/t1").unwrap();
+        assert!(!branch_exists(&r.root, "rustperf/t1").unwrap());
     }
 
     #[test]

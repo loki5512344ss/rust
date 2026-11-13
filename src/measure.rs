@@ -27,7 +27,7 @@ use std::time::Duration;
 /// on the message is unusual, but the two spots that produce and consume it
 /// are a few lines apart in this module and `pipeline.rs`, so it cannot
 /// drift silently.
-pub const CANCELLED_SENTINEL: &str = "__autor3search_measurement_cancelled__";
+pub const CANCELLED_SENTINEL: &str = "__rustperf_measurement_cancelled__";
 
 /// Runs both sides alternately and accumulates their observations.
 ///
@@ -249,7 +249,7 @@ fn side(
         return Err(format!(
             "no results for benchmark(s) {missing:?} in {} — the criterion filter {filter} \
              matched nothing, which exits 0 silently. Check the names in \
-             .autor3search/config.yaml against `cargo bench -- --list`.",
+             .rustperf/config.yaml against `cargo bench -- --list`.",
             dir.display()
         ));
     }

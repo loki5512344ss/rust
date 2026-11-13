@@ -10,8 +10,8 @@ patch one thing → prove correctness and speed**.
 
 | Path | What it is |
 |---|---|
-| `skills/autor3search-rust/SKILL.md` | rewritten skill: phases, iron rules, output contract |
-| `skills/autor3search-rust/references/` | 9 lookup files (see below) |
+| `skills/rustperf/SKILL.md` | rewritten skill: phases, iron rules, output contract |
+| `skills/rustperf/references/` | 9 lookup files (see below) |
 | `docs/rust_guide.md` | Russian guide, edition 2026-11-09 with Top-Down/`perf mem`/`perf c2c` and the nine-video audit |
 | `docs/rust_video_audit.md` | the full audit behind guide §47 (source claims, what was and was not verified) |
 | `docs/rust_perf_case/` | reproducible Cargo case: criterion bench, tests, ABBA bootstrap script, false-sharing example |
@@ -35,7 +35,7 @@ untouched.
 |---|---|---|
 | unsafe gate | `src/unsafe_gate.rs`, `src/pipeline.rs` step 3b, `Reason::UnsafeAdded` | an experiment that adds or changes an `unsafe` region relative to the baseline commit is `FAIL(unsafe_added)` before the build |
 | `allow_unsafe` | `src/config.rs` | human-only switch for the gate; default `false`, omitted from a written config while `false`, so existing configs keep their hash |
-| per-benchmark rows | `src/bin/autor3search-rust/cmd_eval.rs` | `eval --json` gains `benchmarks` (name, medians, `pct_change`, `p`, thresholds) whenever measurement ran; the text output prints name, medians, `pct_change` and `p`, but not `keep_threshold_p`/`n_base`/`n_cand` |
+| per-benchmark rows | `src/bin/rustperf/cmd_eval.rs` | `eval --json` gains `benchmarks` (name, medians, `pct_change`, `p`, thresholds) whenever measurement ran; the text output prints name, medians, `pct_change` and `p`, but not `keep_threshold_p`/`n_base`/`n_cand` |
 | `gitx::file_at` | `src/gitx.rs` | reads a file as of a commit, for the gate |
 
 Why the gate works on tokens and what it cannot see is written at the top of
@@ -50,8 +50,8 @@ on every host, and a PMU counter is absent on many VMs and CI runners. Counters
 are evidence for *detecting* a change (`scripts/instr-count.sh`), not for
 accepting one.
 
-Consequences: `cargo install autor3search-rust` installs **upstream**, without
-either change — build this checkout (`cargo install --path .`) to get them;
+Consequences: upstream's `cargo install autor3search-rust` has neither change —
+build this repository (`cargo install --path .`) to get them;
 and merges from upstream can now conflict in `pipeline.rs`, `verdict.rs`,
 `config.rs`, `cmd_eval.rs` and `templates/program.md`.
 
@@ -110,7 +110,7 @@ The skill was tested A/B on a small crate with a deliberately quadratic
 | rejected idea | — | `sum_above` rewrite: asm byte-identical |
 | result | ~3× but a new data structure to maintain | −31 %, −30 % instructions, ~7 200× fewer allocations |
 
-The measured case is written up in `skills/autor3search-rust/references/examples.md` §8.
+The measured case is written up in `skills/rustperf/references/examples.md` §8.
 
 ## The 2026-11-09 second edition (Top-Down / c2c / video audit)
 
@@ -143,7 +143,7 @@ Fork adjustments on top of that edition:
 
 ## Harness end-to-end
 
-`autor3search-rust 0.2.1` was run on a copy of `docs/rust_perf_case` in its own
+`autor3search-rust 0.2.1` (before the rename) was run on a copy of `docs/rust_perf_case` in its own
 git repository: `init` → `doctor` → `baseline` → patch → `eval --json`. Both
 verdict paths were exercised: `DISCARD` (score 0.9920, −0.80 %) and `KEEP`
 (score 0.9497, −5.03 %). Details in `docs/rust_perf_case/RESULTS.md`.
@@ -159,7 +159,7 @@ bash scripts/install-skill.sh --uninstall
 Copy is the default: a half-updated checkout should not silently change what
 an unattended agent does.
 
-The `~/.agents/skills/autor3search-rust` copy installed by the `skills` CLI
+The `~/.agents/skills/rustperf` copy installed by the `skills` CLI
 (`~/.agents/.skill-lock.json`) is overwritten by the script. Its lock entry
 still points at `autor3search/rust`; updating it through the CLI will restore
 the upstream thin version, so re-run this script afterwards.
@@ -199,6 +199,6 @@ git fetch upstream
 git merge upstream/main     # or rebase
 ```
 
-Conflicts are expected only in `skills/autor3search-rust/SKILL.md` (upstream
+Conflicts are expected only in `skills/rustperf/SKILL.md` (upstream
 owns the thin version) and `README.md` if upstream changes it. The reference
 files, scripts and `docs/rust_guide.md` are fork-only.

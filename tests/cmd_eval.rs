@@ -4,7 +4,7 @@ use common::TestRepo;
 /// A fast config: 4 rounds, criterion's minimum sample size, short times.
 /// Enough to reach significance on a 2x win without taking minutes.
 fn fast_config(repo: &TestRepo) {
-    let p = repo.path().join(".autor3search/config.yaml");
+    let p = repo.path().join(".rustperf/config.yaml");
     let text = std::fs::read_to_string(&p)
         .unwrap()
         .replace("count: 10", "count: 4")
@@ -79,10 +79,10 @@ fn a_genuine_optimization_is_kept_and_advances_the_measurement_commit() {
     // The measurement baseline must advance, or a later no-op would coast to
     // KEEP on this win. Located by walking the repo's own state home
     // (`common::state_dir`) rather than calling `state::state_dir` directly:
-    // that reads AUTOR3SEARCH_RUST_STATE_HOME from this process's own
+    // that reads RUSTPERF_STATE_HOME from this process's own
     // environment, which `run_cli` only ever sets for the child it spawns.
     let dir = common::state_dir(&repo, "t1");
-    let b = autor3search::state::Baseline::load(&dir.join("baseline.json")).unwrap();
+    let b = rustperf_core::state::Baseline::load(&dir.join("baseline.json")).unwrap();
     assert_ne!(
         b.measure_commit, b.commit,
         "measure_commit must advance on KEEP"
@@ -197,7 +197,7 @@ fn stop_force_aborts_an_in_flight_eval_and_writes_no_results_row() {
     assert_eq!(json["reason"], "stop_forced", "{json}");
 
     // Nothing was measured, so nothing is recorded — program.md's contract.
-    let rows = autor3search::results::load(&repo.path().join("results.tsv")).unwrap();
+    let rows = rustperf_core::results::load(&repo.path().join("results.tsv")).unwrap();
     assert!(
         rows.is_empty(),
         "an aborted experiment must not be logged: {rows:?}"

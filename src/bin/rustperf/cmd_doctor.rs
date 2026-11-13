@@ -3,14 +3,14 @@
 //! Always informational: `doctor` always exits 0, whatever it finds.
 
 use crate::args::Args;
-use autor3search::{doctor, gitx};
+use rustperf_core::{doctor, gitx};
 
 pub fn run(argv: &[String]) -> i32 {
     let args = match Args::parse(argv, &[("C", true)]) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
-            return autor3search::EXIT_USAGE;
+            return rustperf_core::EXIT_USAGE;
         }
     };
     // `doctor` still needs a repository root to check disk space and

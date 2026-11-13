@@ -1,12 +1,12 @@
 [package]
-name = "autor3search-rust"
-version = "0.2.1"
+name = "rustperf"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
-description = "Autonomous AI-driven performance optimization for any Rust repository."
-homepage = "https://autor3search.dev"
-repository = "https://github.com/autor3search/rust"
+description = "Performance optimization harness for Rust repositories: frozen gates, interleaved measurement, unsafe gate. Independent fork of autor3search/rust."
+homepage = "https://github.com/loki5512344ss/rust"
+repository = "https://github.com/loki5512344ss/rust"
 authors = ["Gal Be <galevgi@gmail.com>"]
 readme = "README.md"
 keywords = ["autoresearch", "benchmark", "performance", "criterion", "agent"]
@@ -45,9 +45,9 @@ windows-sys = { version = "0.59", features = [
 ] }
 
 [lib]
-name = "autor3search"
+name = "rustperf_core"
 path = "src/lib.rs"
 
 [[bin]]
-name = "autor3search-rust"
-path = "src/bin/autor3search-rust/main.rs"
+name = "rustperf"
+path = "src/bin/rustperf/main.rs"

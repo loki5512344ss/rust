@@ -141,10 +141,10 @@ Use when `perf_event_paranoid` blocks hardware counters, in containers, or when
 you want a call tree that is easier to read than `perf report`. It still needs
 symbols; build with `debuginfo=1`.
 
-`autor3search-rust profile` wraps this for the declared benchmarks:
+`rustperf profile` wraps this for the declared benchmarks:
 
 ```bash
-autor3search-rust profile --tag <tag>
+rustperf profile --tag <tag>
 ```
 
 It runs criterion with `--profile-time 10` and samply's

@@ -46,7 +46,7 @@ fn baseline_creates_the_branch_freezes_tests_and_pins_a_worktree() {
         .unwrap();
     assert_eq!(
         String::from_utf8_lossy(&branch.stdout).trim(),
-        "autor3search-rust/t1"
+        "rustperf/t1"
     );
 
     let state = find_state_dir(repo.state_home(), "t1");
@@ -143,7 +143,7 @@ fn baseline_accepts_a_dash_leading_tag() {
         .unwrap();
     assert_eq!(
         String::from_utf8_lossy(&branch.stdout).trim(),
-        "autor3search-rust/-rf"
+        "rustperf/-rf"
     );
 }
 
@@ -188,7 +188,7 @@ fn baseline_rolls_back_a_failure_after_the_branch_is_created() {
         .output()
         .unwrap();
     Command::new("git")
-        .args(["branch", "-D", "autor3search-rust/t3"])
+        .args(["branch", "-D", "rustperf/t3"])
         .current_dir(repo.path())
         .output()
         .unwrap();
@@ -231,12 +231,7 @@ fn baseline_rolls_back_a_failure_after_the_branch_is_created() {
     );
 
     let branch_exists = Command::new("git")
-        .args([
-            "show-ref",
-            "--verify",
-            "--quiet",
-            "refs/heads/autor3search-rust/t3",
-        ])
+        .args(["show-ref", "--verify", "--quiet", "refs/heads/rustperf/t3"])
         .current_dir(repo.path())
         .status()
         .unwrap()

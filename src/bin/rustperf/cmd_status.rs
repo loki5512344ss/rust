@@ -14,7 +14,7 @@
 //! on `eval --json`.
 
 use crate::args::Args;
-use autor3search::{gitx, results, state};
+use rustperf_core::{gitx, results, state};
 use std::path::Path;
 
 pub fn run(argv: &[String]) -> i32 {
@@ -22,7 +22,7 @@ pub fn run(argv: &[String]) -> i32 {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
-            return autor3search::EXIT_USAGE;
+            return rustperf_core::EXIT_USAGE;
         }
     };
     match status(&args) {
@@ -49,7 +49,7 @@ fn resolve_tag(root: &Path, tag_flag: Option<&str>) -> Result<String, String> {
     let branch = gitx::current_branch(root)?;
     state::tag_from_branch(&branch).ok_or_else(|| {
         format!(
-            "current branch {branch:?} was not created by 'autor3search-rust baseline --tag \
+            "current branch {branch:?} was not created by 'rustperf baseline --tag \
              <tag>' — pass --tag <tag>, or check out the run branch first"
         )
     })
@@ -155,14 +155,14 @@ fn stop_lines(dir: &Path) -> String {
     if state::stop_requested(dir) {
         format!(
             "{:<14} requested — the agent will exit the loop at its next verdict\n\nto cancel \
-             the stop:  autor3search-rust stop --clear\nto stop sooner:      autor3search-rust \
+             the stop:  rustperf stop --clear\nto stop sooner:      rustperf \
              stop --force\n",
             "stop"
         )
     } else {
         format!(
-            "{:<14} not requested\n\nto stop after the current experiment:  autor3search-rust \
-             stop\nto stop now, abandoning it:            autor3search-rust stop --force\n",
+            "{:<14} not requested\n\nto stop after the current experiment:  rustperf \
+             stop\nto stop now, abandoning it:            rustperf stop --force\n",
             "stop"
         )
     }

@@ -114,7 +114,7 @@ variants are slower there than at 99 % — a second effect, visible in both.)
 ## Harness validation: both verdict paths, real runs
 
 The same case crate was copied to a separate git repository and driven through
-`autor3search-rust` itself (`init` → `doctor` → `baseline` → one patch →
+`rustperf` itself (`init` → `doctor` → `baseline` → one patch →
 `eval --json`), with `count: 4`, `sample_size: 10`, `measurement_time: 1s`
 to keep each experiment short.
 
@@ -209,7 +209,7 @@ below was fired on purpose.
 | `vec-remarks.sh` | `--bench select_active` (+ `--filter select_active.rs`) on this crate; `--example loops` / `--lib` on a scratch crate with one vectorizable and one non-vectorizable `#[inline(never)]` fn | 0 | remarks are captured through the RUSTC_WRAPPER: 5 applied / 51 missed (loop-vectorize) and 19 / 147 (slp) for the bench; the bench's own loops (`select_active.rs:9,13,16`) are missed with reasons; the scratch example yields one success plus one missed with 3 analysis lines |
 | `perf-diff.sh` | `-- dense-20M padded-20M` | 0 | two flat `cycles:u` records; the dense closure holds 99.97 % of A (16.17 G cycles), the padded closure +99.86 % of B (1.52 G) |
 | `perf-diff.sh` (failures) | `-- dense-2M 'exit 3'`; `-- 'true' 'true'` | 1; 0 | a nonzero command aborts honestly; near-empty records degrade to shell symbols and fire the stripped-binary hint |
-| `diff-fuzz.sh` | `--out <scratch>/tests --old o --new n --sig {slice-u64, slice-u8, str} --iters 300…500`, then `cargo test --release --test diff_fuzz` | 0/1 | all three signatures ran: an equal pair passes; `saturating_add` vs `wrapping_add` fails and the printed `DIFF_FUZZ_REPLAY=…` reruns the exact case; a `str` pair differing on blank lines fails (old=163, new=158); writing into a `tests/` under an autor3search run is refused (exit 1); usage errors exit 2 |
+| `diff-fuzz.sh` | `--out <scratch>/tests --old o --new n --sig {slice-u64, slice-u8, str} --iters 300…500`, then `cargo test --release --test diff_fuzz` | 0/1 | all three signatures ran: an equal pair passes; `saturating_add` vs `wrapping_add` fails and the printed `DIFF_FUZZ_REPLAY=…` reruns the exact case; a `str` pair differing on blank lines fails (old=163, new=158); writing into a `tests/` under a rustperf run is refused (exit 1); usage errors exit 2 |
 
 Bugs found by executing, fixed in the scripts:
 

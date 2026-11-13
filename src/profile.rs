@@ -60,8 +60,7 @@ pub struct Options {
 pub fn run(o: &Options) -> Result<String, String> {
     if o.targets.is_empty() {
         return Err(
-            "no criterion bench targets configured — run 'autor3search-rust init' first"
-                .to_string(),
+            "no criterion bench targets configured — run 'rustperf init' first".to_string(),
         );
     }
     std::fs::create_dir_all(&o.profiles_dir)

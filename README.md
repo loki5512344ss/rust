@@ -1,10 +1,9 @@
-# autor3search-rust
+# rustperf
 
-[![ci](https://github.com/autor3search/rust/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/autor3search/rust/actions/workflows/ci.yml?query=branch%3Amain)
-[![crates.io](https://img.shields.io/crates/v/autor3search-rust?label=crates.io)](https://crates.io/crates/autor3search-rust)
+[![ci](https://github.com/loki5512344ss/rust/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/loki5512344ss/rust/actions/workflows/ci.yml?query=branch%3Amain)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[autoresearch for your codebase](https://autor3search.dev/) — the same loop in eight languages, with every agent prompt in one place.
+Independent fork of [autor3search/rust](https://github.com/autor3search/rust) (MIT, original author credited in `LICENSE` and `Cargo.toml`), developed separately: an `unsafe` gate, per-benchmark deltas, measurement scripts and an extended skill. Not published on crates.io; install from this repository.
 
 **Autonomous AI-driven performance optimization for any Rust repository.**
 
@@ -39,7 +38,7 @@ optional**.
 > illustration.
 >
 > What version you get, and what changed in it, is on the
-> [releases page](https://github.com/autor3search/rust/releases) — this
+> [releases page](https://github.com/loki5512344ss/rust/releases) — this
 > README describes the current one.
 
 ---
@@ -50,40 +49,40 @@ Open your coding agent inside the Rust repository you want to make faster,
 and paste this:
 
 ```text
-Install and run autor3search-rust on this repository, then optimize it.
+Install and run rustperf on this repository, then optimize it.
 
 Setup:
 0. Run git status. If the working tree has changes, STOP and ask me to
    commit or stash them first.
-1. cargo install --locked autor3search-rust
+1. cargo install --locked --git https://github.com/loki5512344ss/rust
    Make sure ~/.cargo/bin is on PATH.
-2. autor3search-rust init
+2. rustperf init
    Show me the benchmarks it discovered. If it reports none, STOP and tell
    me: this tool can only optimize what it can measure.
-3. git add -A && git commit -m "autor3search-rust init"
-4. autor3search-rust doctor
+3. git add -A && git commit -m "rustperf init"
+4. rustperf doctor
    Show me any warnings. If the machine looks unfit to measure, stop and ask
    me before continuing.
-5. autor3search-rust baseline --tag <today, e.g. sep6>
+5. rustperf baseline --tag <today, e.g. sep6>
 
 Then:
 6. Read program.md in this repository, in full. It is your instruction set
    for the rest of this run. Follow it exactly.
 
 Rules for the whole run:
-- Never edit program.md, .autor3search/config.yaml, results.tsv, or anything
+- Never edit program.md, .rustperf/config.yaml, results.tsv, or anything
   the harness writes. They are not yours.
-- Never pass --force to any autor3search-rust command. (I may run
-  `autor3search-rust stop --force` myself; that one is mine, not yours.)
+- Never pass --force to any rustperf command. (I may run
+  `rustperf stop --force` myself; that one is mine, not yours.)
 - One idea per experiment. Commit before each eval.
 - KEEP means the commit stays. Anything else means git reset --hard HEAD~1.
 - Print one context line before each experiment, so I can see where you are:
-  [exp <n> | <branch> | vs <measure_commit> | stop: autor3search-rust stop]
+  [exp <n> | <branch> | vs <measure_commit> | stop: rustperf stop]
 
-Run the loop until I stop you. I stop you by running `autor3search-rust stop`
+Run the loop until I stop you. I stop you by running `rustperf stop`
 in my own terminal — you will see it as "stop_requested": true in a verdict.
 When you do: apply that verdict, do not start another experiment, run
-`autor3search-rust report`, summarize what you tried, and exit the loop.
+`rustperf report`, summarize what you tried, and exit the loop.
 ```
 
 That's the whole handoff. The agent installs the tool, sets the run up, and
@@ -91,8 +90,8 @@ then follows `program.md` — which the harness generated for your repository
 and which tells it how to run the keep-or-discard loop.
 
 What you get back: one commit per accepted change on a branch named
-`autor3search-rust/<tag>`, and a `results.tsv` recording every experiment
-that was tried, including the ones that failed. `autor3search-rust report`
+`rustperf/<tag>`, and a `results.tsv` recording every experiment
+that was tried, including the ones that failed. `rustperf report`
 summarizes it.
 
 Two things worth knowing before you start it:
@@ -106,13 +105,13 @@ Two things worth knowing before you start it:
 ### Or install it as a skill
 
 The same prompt ships as an agent skill, in
-[`skills/autor3search-rust`](skills/autor3search-rust/SKILL.md). Install it once and ask your
+[`skills/rustperf`](skills/rustperf/SKILL.md). Install it once and ask your
 agent to make the repository faster; it loads the prompt itself.
 
 ```sh
-mkdir -p ~/.claude/skills/autor3search-rust
-curl -fsSL https://raw.githubusercontent.com/autor3search/rust/main/skills/autor3search-rust/SKILL.md \
-  -o ~/.claude/skills/autor3search-rust/SKILL.md
+mkdir -p ~/.claude/skills/rustperf
+curl -fsSL https://raw.githubusercontent.com/loki5512344ss/rust/main/skills/rustperf/SKILL.md \
+  -o ~/.claude/skills/rustperf/SKILL.md
 ```
 
 ## The idea
@@ -123,11 +122,11 @@ Rust. A compiled harness holds the metric, and the agent cannot reach it.
 
 | Piece | What it is | Who edits it |
 |---|---|---|
-| `autor3search-rust` | the harness binary: gates, measures, scores | nobody — it's compiled |
+| `rustperf` | the harness binary: gates, measures, scores | nobody — it's compiled |
 | your `tests/**` and `benches/**` files | frozen at baseline, restored before every run | nobody — restored automatically |
 | your `src/**` | whatever is in `scope` | **the agent** |
 | `program.md` | the agent's instructions | **you** |
-| frozen tests, baseline worktree, baseline record | lives outside your repo, under `dirs::cache_dir()` (or `AUTOR3SEARCH_RUST_STATE_HOME`) | nobody — the agent's own edits cannot reach it; a determined agent running as your user still can, so detection here is partial, not a guarantee (see [What the harness enforces](#what-the-harness-enforces)) |
+| frozen tests, baseline worktree, baseline record | lives outside your repo, under `dirs::cache_dir()` (or `RUSTPERF_STATE_HOME`) | nobody — the agent's own edits cannot reach it; a determined agent running as your user still can, so detection here is partial, not a guarantee (see [What the harness enforces](#what-the-harness-enforces)) |
 
 That last row matters: the agent edits the repository, so anything the score
 depends on that *lived* there would be silently writable by the very agent
@@ -157,23 +156,23 @@ without also erasing whatever real optimization sits next to them — see
 ## Quick start
 
 ```bash
-cargo install --locked autor3search-rust
+cargo install --locked --git https://github.com/loki5512344ss/rust
 
 cd your-rust-project
-autor3search-rust init                                # find benchmarks, write config + program.md
-git add -A && git commit -m "autor3search-rust init"  # baseline refuses a dirty tree
-autor3search-rust doctor                              # is this machine fit to measure?
-autor3search-rust baseline --tag sep4                 # freeze tests, pin the baseline commit
+rustperf init                                # find benchmarks, write config + program.md
+git add -A && git commit -m "rustperf init"  # baseline refuses a dirty tree
+rustperf doctor                              # is this machine fit to measure?
+rustperf baseline --tag sep4                 # freeze tests, pin the baseline commit
 ```
 
 That commit matters — `init` only writes files, it does not commit them, and
 `baseline` refuses to run against an uncommitted tree because a baseline
 pinned against what's on disk (not what's in git) would not be reproducible.
-`init` writes three things: `.gitignore` entries, `.autor3search/config.yaml`,
-and `program.md`. `.autor3search/config.yaml` is the one file under
-`.autor3search/` that gets committed — it's the run configuration, and
+`init` writes three things: `.gitignore` entries, `.rustperf/config.yaml`,
+and `program.md`. `.rustperf/config.yaml` is the one file under
+`.rustperf/` that gets committed — it's the run configuration, and
 humans own it; everything else the harness later writes under
-`.autor3search/` is gitignored.
+`.rustperf/` is gitignored.
 
 Then start your agent in the repo:
 
@@ -191,17 +190,17 @@ object and nothing else — so there is no human-readable stream to watch.
 Ask the run where it is instead, from any terminal, any branch, at any time:
 
 ```
-$ autor3search-rust status
+$ rustperf status
 run tag        proof
-branch         autor3search-rust/proof  (checked out)
+branch         rustperf/proof  (checked out)
 baseline       19a7b01  (run started here)
 measuring vs   55553fb  (advanced past the baseline by earlier KEEPs)
-worktree       /Users/you/Library/Caches/autor3search-rust/4799b987556c0f52/proof/baseline-worktree
+worktree       /Users/you/Library/Caches/rustperf/4799b987556c0f52/proof/baseline-worktree
 experiments    1 run  (1 keep, 0 discard, 0 fail, 0 crash)  — next is #2
 stop           not requested
 
-to stop after the current experiment:  autor3search-rust stop
-to stop now, abandoning it:            autor3search-rust stop --force
+to stop after the current experiment:  rustperf stop
+to stop now, abandoning it:            rustperf stop --force
 ```
 
 (That is real output, from the run recorded in the
@@ -211,14 +210,14 @@ on a run cannot change it.
 There are three ways to stop, and they differ in what happens to the
 experiment currently in flight.
 
-**`autor3search-rust stop` — graceful.** Writes a request the agent reads at
+**`rustperf stop` — graceful.** Writes a request the agent reads at
 its next verdict. The experiment under way finishes and is scored, its KEEP
 or DISCARD is applied, and only then does the loop exit with a summary.
 Nothing is thrown away. This is the one to use.
-`autor3search-rust stop --clear` cancels it if you change your mind before
+`rustperf stop --clear` cancels it if you change your mind before
 the agent notices.
 
-**`autor3search-rust stop --force` — immediate.** For when you cannot wait
+**`rustperf stop --force` — immediate.** For when you cannot wait
 out a long benchmark. It writes the same request, then signals the running
 `eval` to abandon the experiment. The experiment is lost (no `results.tsv`
 row is written, because nothing was measured); every kept commit before it
@@ -261,17 +260,17 @@ runs the compiled benchmark as a grandchild process, so an `eval` killed
 without a chance to clean up would leave that benchmark running — burning
 CPU and corrupting every later measurement on the machine.
 
-Whichever you use, the work is on the run branch `autor3search-rust/<tag>`
-and `autor3search-rust report` summarizes it. Resuming later needs nothing
+Whichever you use, the work is on the run branch `rustperf/<tag>`
+and `rustperf report` summarizes it. Resuming later needs nothing
 special: clear any pending stop and point the agent back at `program.md`.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `init` | Scans the repo with `cargo metadata` and criterion `--list`, and writes `.autor3search/config.yaml` + `program.md`. Refuses to overwrite an existing config without `--force`. |
+| `init` | Scans the repo with `cargo metadata` and criterion `--list`, and writes `.rustperf/config.yaml` + `program.md`. Refuses to overwrite an existing config without `--force`. |
 | `doctor` | Checks whether this machine can measure reliably (CPU frequency scaling, thermal throttling risk, load average, disk space, on-battery, `CARGO_INCREMENTAL`, a `[profile.bench]` override, a nightly default toolchain) and prints its findings. Load average and disk space are unix-only — there is no portable equivalent — so on Windows it warns you about less. Informational — always exits 0. |
-| `baseline --tag <tag>` | Creates the run branch `autor3search-rust/<tag>`, freezes every in-scope `tests/**`/`benches/**` file, hashes every in-scope `src/**` file's inline tests and doctests, hashes every locked file present on disk, and pins a detached worktree at the baseline commit. Refuses a dirty tree and a reused tag. |
+| `baseline --tag <tag>` | Creates the run branch `rustperf/<tag>`, freezes every in-scope `tests/**`/`benches/**` file, hashes every in-scope `src/**` file's inline tests and doctests, hashes every locked file present on disk, and pins a detached worktree at the baseline commit. Refuses a dirty tree and a reused tag. |
 | `profile` | Runs the declared benchmarks under criterion's `--profile-time` with [samply](https://github.com/mstange/samply) attached, and prints the top self-time symbols — real sampling-profiler data on where time actually goes, rather than an agent guessing from reading source. When samply is not installed, prints how to install it (`cargo install samply`) and exits 0 rather than failing the run. Symbol names come from samply's `--unstable-presymbolicate` sidecar; a samply too old to have that flag still profiles, but its frames stay as raw addresses and the report says so. |
 | `eval` | Runs one experiment: gates (scope, locked files, config integrity, restore, inline-test check, frozen-set check, build, test, worktree integrity), measures the candidate against the pinned baseline worktree, scores it, appends a `results.tsv` row, exits `0`/`1`/`2`/`3` for KEEP/DISCARD/FAIL/CRASH, and on `KEEP` re-points the pinned worktree at the candidate's commit so the next `eval` measures against it (see [Scoring](#scoring)). |
 | `status` | Prints where a run is: run branch and whether it is checked out, the frozen baseline commit and the advancing measurement commit, the pinned worktree, how many experiments have run and with what verdicts, and whether a stop is pending. Read-only. Accepts `--tag <tag>` so it works from any branch. |
@@ -297,11 +296,11 @@ the wrong thing.
 
 Everything the metric depends on — the frozen golden test copies, the
 baseline record, the pinned worktree — is kept **out of the repository**,
-under `<user cache dir>/autor3search-rust/<repo hash>/<tag>/`. That is
+under `<user cache dir>/rustperf/<repo hash>/<tag>/`. That is
 deliberate: the agent edits the repository, so in-tree state would be state
 the agent could rewrite to make itself look good.
 
-Set `AUTOR3SEARCH_RUST_STATE_HOME` to an absolute path to put it somewhere
+Set `RUSTPERF_STATE_HOME` to an absolute path to put it somewhere
 else — useful in a container or CI runner with no durable cache. Run state
 is keyed underneath it the same way, one directory per repository and one
 per tag. A relative value is refused: it would resolve against whatever
@@ -411,7 +410,7 @@ been indistinguishable from noise, the harness would have returned
 `report` afterward:
 
 ```
-autor3search-rust report: 1 experiment(s)  (1 keep, 0 discard, 0 fail, 0 crash)
+rustperf report: 1 experiment(s)  (1 keep, 0 discard, 0 fail, 0 crash)
 
 cumulative speedup: 13.6%  (score 0.86, 1.16x faster overall)
 
@@ -442,7 +441,7 @@ An agent optimizing your code can "win" by cheating. Each route is closed:
 | Bank measurement noise as a win | a Mann-Whitney test must clear `p < 0.05`; noise is `DISCARD` |
 | Speed up A by wrecking B | any significant regression over 5 % rejects the change outright |
 | Buy speed with new or changed `unsafe` | `unsafe` regions are token-scanned against the baseline; introducing or changing one is `FAIL(unsafe_added)` before the build. Removing or moving unchanged `unsafe` is allowed |
-| Loosen the rules mid-run (raise `max_regress_pct`, narrow `scope`, drop a benchmark) | `.autor3search/config.yaml` is hashed at baseline; any change to it fails the run with a config-hash mismatch |
+| Loosen the rules mid-run (raise `max_regress_pct`, narrow `scope`, drop a benchmark) | `.rustperf/config.yaml` is hashed at baseline; any change to it fails the run with a config-hash mismatch |
 | Tamper with the pinned baseline worktree directly (make the *baseline* slower, rather than the candidate faster) | detected when its `HEAD` no longer matches the recorded measurement commit — `FAIL(baseline_tampered)`. **This is detection, not prevention, and it is partial**: the state directory is outside the repo, but the agent runs as the same OS user, so nothing stops it editing the worktree in place — it is only caught if `HEAD` moves |
 | Rewrite the frozen store (the golden copies `restore` reads from, so every later `eval` restores the tampered copy instead of the real one) | detected via the manifest hash recorded at baseline — `FAIL(frozen_store_tampered)`. Unrecoverable for that run, since the reference copy is the thing that was lost; start a fresh run with a new tag |
 | Compare against a stale baseline | the measurement baseline is **re-measured every run**, interleaved with the candidate |
@@ -645,7 +644,7 @@ None of these is cosmetic, and none of them is going to change soon.
   scanned. What the gate cannot see is a *safe* edit that breaks the invariant
   of an existing `unsafe` region, or `unsafe` introduced by a dependency or
   proc macro. Upstream has no such gate. Set `allow_unsafe: true` in
-  `.autor3search/config.yaml` to disable the gate (human-only; default
+  `.rustperf/config.yaml` to disable the gate (human-only; default
   `false`).
 - **The baseline worktree compiles from cold on a run's first `eval`.** The
   pinned worktree has no warm `target/` the first time it is measured
@@ -668,9 +667,10 @@ This branch is a fork. In addition to the upstream harness, it adds:
 - **New scripts** in `scripts/`: `instr-count.sh`, `layout-check.sh`,
   `vec-remarks.sh`, `perf-diff.sh`, `diff-fuzz.sh` (pre-existing:
   `bench-ab.sh`, `perf-report.sh`, `asm-report.sh`).
-- **Install from this checkout** with `cargo install --path .`;
-  `cargo install autor3search-rust` installs upstream 0.2.1 without these
-  changes.
+- **Install** with `cargo install --locked --git https://github.com/loki5512344ss/rust`
+  or, from a checkout, `cargo install --path .`. The crate is named
+  `rustperf`; upstream's `autor3search-rust` on crates.io is a different
+  program without these changes.
 
 See [`docs/fork-notes.md`](docs/fork-notes.md) for the full change table and
 skill details.
@@ -748,21 +748,21 @@ Two narrower gaps, named rather than glossed over:
 
 ## Repos with no benchmarks
 
-`autor3search-rust init` discovers benchmarks with `cargo metadata` (to find
+`rustperf init` discovers benchmarks with `cargo metadata` (to find
 criterion `[[bench]]` targets, reading `harness` from each target's own
 `Cargo.toml` entry) and then criterion's own `--list` (to get the exact
 runtime benchmark ids). If it finds none, it refuses to write
-`.autor3search/config.yaml` and exits with an error, rather than generating
+`.rustperf/config.yaml` and exits with an error, rather than generating
 a config with an empty `benchmarks:` list that would silently optimize
 nothing.
 
-That refusal is deliberate: `autor3search-rust` has no other notion of
+That refusal is deliberate: `rustperf` has no other notion of
 "faster." The verdict — `KEEP`, `DISCARD`, `FAIL`, `CRASH` — is entirely a
 function of the declared benchmarks' timings across a baseline and a
 candidate. No benchmarks means no signal to gate on, at which point every
 candidate would either be rejected for no reason or accepted for no reason.
 
-To use `autor3search-rust` on a repository like this:
+To use `rustperf` on a repository like this:
 
 1. Add a criterion bench target to `Cargo.toml`:
 
@@ -780,9 +780,9 @@ To use `autor3search-rust` on a repository like this:
    that are entirely real and entirely useless — confident percentages
    attached to work that was never the bottleneck. Benchmark the function,
    loop, or request path that actually dominates the workload you care
-   about, ideally informed by a profile of the real program (`autor3search-rust profile`,
+   about, ideally informed by a profile of the real program (`rustperf profile`,
    once benchmarks exist) rather than a guess.
-3. Re-run `autor3search-rust init` once the benchmark exists. It will pick
+3. Re-run `rustperf init` once the benchmark exists. It will pick
    it up and proceed normally.
 
 ## License

@@ -1,7 +1,7 @@
 //! The `eval` command: flags, output formatting and the exit code only.
 //!
 //! Everything that decides KEEP/DISCARD/FAIL/CRASH lives in
-//! [`autor3search::pipeline`], testable without a process boundary. This file
+//! [`rustperf_core::pipeline`], testable without a process boundary. This file
 //! is deliberately thin — it resolves the run from the current branch, opens
 //! the run log, calls the pipeline once, records a `results.tsv` row and
 //! prints one of two output shapes.
@@ -10,11 +10,11 @@
 //! has a real, verified-live pid to signal rather than a guess) and installs
 //! a `SIGTERM` handler that asks the pipeline to abort at its next safe
 //! checkpoint — see [`install_cancel_handler`] and
-//! `autor3search::state::CANCEL_REQUESTED`.
+//! `rustperf_core::state::CANCEL_REQUESTED`.
 
 use crate::args::Args;
-use autor3search::verdict::Status;
-use autor3search::{config, gitx, pipeline, results, state};
+use rustperf_core::verdict::Status;
+use rustperf_core::{config, gitx, pipeline, results, state};
 use serde_json::json;
 use std::io::Write;
 
@@ -31,7 +31,7 @@ pub fn run(argv: &[String]) -> i32 {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
-            return autor3search::EXIT_USAGE;
+            return rustperf_core::EXIT_USAGE;
         }
     };
     install_cancel_handler();
@@ -46,7 +46,7 @@ pub fn run(argv: &[String]) -> i32 {
 
 /// A pid this process is asked to signal via `libc::signal` merely stores a
 /// function pointer, so the handler itself can only touch static memory —
-/// see `autor3search::state::CANCEL_REQUESTED`, which is exactly that: a
+/// see `rustperf_core::state::CANCEL_REQUESTED`, which is exactly that: a
 /// process-wide flag, set here and polled from inside `Runner::cargo`'s own
 /// wait loop and at a few points in the pipeline between gates, so a signal
 /// arriving mid-subprocess is noticed within one poll tick rather than only
@@ -88,7 +88,7 @@ fn eval(args: &Args) -> Result<i32, String> {
     let branch = gitx::current_branch(&root)?;
     let tag = state::tag_from_branch(&branch).ok_or_else(|| {
         format!(
-            "current branch {branch:?} was not created by 'autor3search-rust baseline --tag \
+            "current branch {branch:?} was not created by 'rustperf baseline --tag \
              <tag>' — check out a run branch first"
         )
     })?;
@@ -239,7 +239,7 @@ fn eval(args: &Args) -> Result<i32, String> {
 /// Bonferroni-corrected bar a benchmark must clear to justify a KEEP, given
 /// here so a reader does not have to know the benchmark count to interpret
 /// `p`.
-fn benchmark_rows(deltas: &[autor3search::bench::Delta]) -> serde_json::Value {
+fn benchmark_rows(deltas: &[rustperf_core::bench::Delta]) -> serde_json::Value {
     let k = deltas.len().max(1) as f64;
     serde_json::Value::Array(
         deltas

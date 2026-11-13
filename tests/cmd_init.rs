@@ -14,7 +14,7 @@ use common::TestRepo;
 // is safe; see `common::cargo_target_dir_for`'s doc comment for why that
 // distinction matters.
 fn init(repo: &Path, extra: &[&str]) -> std::process::Output {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_autor3search-rust"));
+    let mut c = Command::new(env!("CARGO_BIN_EXE_rustperf"));
     c.arg("init")
         .arg("-C")
         .arg(repo)
@@ -33,7 +33,7 @@ fn init_writes_config_program_and_gitignore() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let cfg = repo.path().join(".autor3search/config.yaml");
+    let cfg = repo.path().join(".rustperf/config.yaml");
     assert!(cfg.exists(), "config must be written");
     let text = std::fs::read_to_string(&cfg).unwrap();
     assert!(
@@ -51,11 +51,11 @@ fn init_writes_config_program_and_gitignore() {
         "program.md must be written"
     );
 
-    // Ignoring .autor3search/ wholesale would leave the config untracked,
+    // Ignoring .rustperf/ wholesale would leave the config untracked,
     // which contradicts the whole reason it lives in the repo.
     let ignore = std::fs::read_to_string(repo.path().join(".gitignore")).unwrap();
-    assert!(ignore.contains(".autor3search/*"), "{ignore}");
-    assert!(ignore.contains("!.autor3search/config.yaml"), "{ignore}");
+    assert!(ignore.contains(".rustperf/*"), "{ignore}");
+    assert!(ignore.contains("!.rustperf/config.yaml"), "{ignore}");
     assert!(ignore.contains("results.tsv"), "{ignore}");
     assert!(ignore.contains("run.log"), "{ignore}");
 }
@@ -87,7 +87,7 @@ fn init_refuses_a_repository_with_no_benchmarks() {
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("no benchmarks"), "{stderr}");
-    assert!(!repo.path().join(".autor3search/config.yaml").exists());
+    assert!(!repo.path().join(".rustperf/config.yaml").exists());
 }
 
 #[test]

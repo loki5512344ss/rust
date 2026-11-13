@@ -10,7 +10,7 @@
 //! for lacking a tool this harness does not require.
 
 use crate::args::Args;
-use autor3search::{config, gitx, profile, state};
+use rustperf_core::{config, gitx, profile, state};
 use std::path::Path;
 
 pub fn run(argv: &[String]) -> i32 {
@@ -18,7 +18,7 @@ pub fn run(argv: &[String]) -> i32 {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
-            return autor3search::EXIT_USAGE;
+            return rustperf_core::EXIT_USAGE;
         }
     };
     if !profile::samply_available() {
@@ -26,7 +26,7 @@ pub fn run(argv: &[String]) -> i32 {
             "samply is not installed, so there is nothing to profile with.\n\nsamply is chosen \
              over cargo-flamegraph because it needs no elevated privileges — dtrace on macOS \
              requires disabling SIP.\n\nInstall it with:\n\n    {}\n\nthen run \
-             'autor3search-rust profile' again.\n",
+             'rustperf profile' again.\n",
             profile::INSTALL_HINT
         );
         return 0;
@@ -53,7 +53,7 @@ fn resolve_tag(root: &Path, tag_flag: Option<&str>) -> Result<String, String> {
     let branch = gitx::current_branch(root)?;
     state::tag_from_branch(&branch).ok_or_else(|| {
         format!(
-            "current branch {branch:?} was not created by 'autor3search-rust baseline --tag \
+            "current branch {branch:?} was not created by 'rustperf baseline --tag \
              <tag>' — pass --tag <tag>, or check out the run branch first"
         )
     })

@@ -62,11 +62,11 @@ fn cargo_target_dir_for(args: &[&str]) -> Option<PathBuf> {
 /// warning itself.
 #[allow(dead_code)]
 pub fn run_cli(repo: &TestRepo, args: &[&str]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_autor3search-rust"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_rustperf"));
     cmd.args(args)
         .arg("-C")
         .arg(repo.path())
-        .env("AUTOR3SEARCH_RUST_STATE_HOME", repo.state_home());
+        .env("RUSTPERF_STATE_HOME", repo.state_home());
     if let Some(dir) = cargo_target_dir_for(args) {
         cmd.env("CARGO_TARGET_DIR", dir);
     }
@@ -83,11 +83,11 @@ pub fn run_cli(repo: &TestRepo, args: &[&str]) -> Output {
 /// today, so it carries `#[allow(dead_code)]` like every other helper here.
 #[allow(dead_code)]
 pub fn spawn_cli(repo: &TestRepo, args: &[&str]) -> Child {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_autor3search-rust"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_rustperf"));
     cmd.args(args)
         .arg("-C")
         .arg(repo.path())
-        .env("AUTOR3SEARCH_RUST_STATE_HOME", repo.state_home())
+        .env("RUSTPERF_STATE_HOME", repo.state_home())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if let Some(dir) = cargo_target_dir_for(args) {
@@ -112,10 +112,10 @@ pub fn git(root: &Path, args: &[&str]) {
 }
 
 /// Locates `repo`'s out-of-tree state directory for `tag` by walking its
-/// state home on disk, rather than calling `autor3search::state::state_dir`
+/// state home on disk, rather than calling `rustperf_core::state::state_dir`
 /// directly.
 ///
-/// That function derives the directory from `AUTOR3SEARCH_RUST_STATE_HOME`
+/// That function derives the directory from `RUSTPERF_STATE_HOME`
 /// in the CURRENT process's environment, which `run_cli` only ever sets for
 /// the child process it spawns. Test threads share one process, so setting
 /// that variable for a direct, in-process call would race against every
@@ -207,7 +207,7 @@ impl TestRepo {
     /// The state home this repo's runs use, so tests never touch the
     /// developer's real cache. Not read by `cmd_init` tests (`init` writes
     /// only into the repository); kept for the command-level tests that
-    /// exercise state under `AUTOR3SEARCH_RUST_STATE_HOME`.
+    /// exercise state under `RUSTPERF_STATE_HOME`.
     #[allow(dead_code)]
     pub fn state_home(&self) -> &Path {
         self._state.path()

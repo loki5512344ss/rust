@@ -20,7 +20,7 @@ fn status_reports_the_run_and_writes_nothing() {
     for expected in [
         "run tag",
         "t1",
-        "autor3search-rust/t1",
+        "rustperf/t1",
         "baseline",
         "worktree",
         "stop",
@@ -92,7 +92,7 @@ fn status_advises_a_real_fix_for_a_missing_worktree_not_a_dead_end() {
     let text = String::from_utf8_lossy(&common::run_cli(&repo, &["status"]).stdout).into_owned();
     assert!(text.contains("MISSING"), "{text}");
     assert!(
-        !text.contains("re-run `autor3search-rust baseline --tag t1 --force`"),
+        !text.contains("re-run `rustperf baseline --tag t1 --force`"),
         "must not recommend a command baseline always refuses:\n{text}"
     );
     assert!(

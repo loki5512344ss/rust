@@ -139,7 +139,7 @@ Write it down: "V1–V6 measured, none cleared the noise floor; bottleneck is
 I/O, not code" is a valuable result. Do not invent a winner and do not widen
 the benchmark until something passes.
 
-## 6. Interaction with the autor3search-rust harness
+## 6. Interaction with the rustperf harness
 
 - The harness evaluates one commit at a time; experimentation maps to one
   branch per variant and `eval` on each (or `git reset --hard HEAD~1` between

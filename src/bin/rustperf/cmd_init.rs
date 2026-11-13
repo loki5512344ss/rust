@@ -1,5 +1,5 @@
 use crate::args::Args;
-use autor3search::{config, discover, gitx, runner};
+use rustperf_core::{config, discover, gitx, runner};
 use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
@@ -11,7 +11,7 @@ pub fn run(argv: &[String]) -> i32 {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
-            return autor3search::EXIT_USAGE;
+            return rustperf_core::EXIT_USAGE;
         }
     };
     match init(&args) {
@@ -88,7 +88,7 @@ fn init(args: &Args) -> Result<String, String> {
         ..config::Config::default()
     };
     std::fs::create_dir_all(cfg_path.parent().unwrap())
-        .map_err(|e| format!("create .autor3search: {e}"))?;
+        .map_err(|e| format!("create .rustperf: {e}"))?;
     std::fs::write(
         &cfg_path,
         serde_yaml::to_string(&cfg).map_err(|e| format!("encode config: {e}"))?,
@@ -113,7 +113,7 @@ fn init(args: &Args) -> Result<String, String> {
     }
     msg.push_str(&format!(
         "\nwrote {}\nwrote program.md\n\nNext:\n  git add -A && git commit -m \
-         \"autor3search-rust init\"\n  autor3search-rust doctor\n  autor3search-rust \
+         \"rustperf init\"\n  rustperf doctor\n  rustperf \
          baseline --tag <today>\n",
         config::CONFIG_PATH
     ));
@@ -122,14 +122,14 @@ fn init(args: &Args) -> Result<String, String> {
 
 /// Appends the harness's ignore rules, without disturbing existing ones.
 ///
-/// `.autor3search/*` plus a negation, never `.autor3search/` wholesale:
+/// `.rustperf/*` plus a negation, never `.rustperf/` wholesale:
 /// ignoring the directory would leave `config.yaml` untracked, which
 /// contradicts the entire reason it lives in the repository rather than the
 /// state directory.
 fn write_gitignore(root: &Path) -> Result<(), String> {
     const RULES: &[&str] = &[
-        ".autor3search/*",
-        "!.autor3search/config.yaml",
+        ".rustperf/*",
+        "!.rustperf/config.yaml",
         "results.tsv",
         "run.log",
     ];
@@ -151,7 +151,7 @@ fn write_gitignore(root: &Path) -> Result<(), String> {
     if !existing.is_empty() && !existing.ends_with('\n') {
         writeln!(f).map_err(|e| format!("write .gitignore: {e}"))?;
     }
-    writeln!(f, "\n# autor3search-rust").map_err(|e| format!("write .gitignore: {e}"))?;
+    writeln!(f, "\n# rustperf").map_err(|e| format!("write .gitignore: {e}"))?;
     for rule in missing {
         writeln!(f, "{rule}").map_err(|e| format!("write .gitignore: {e}"))?;
     }

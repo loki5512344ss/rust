@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 /// The per-repository state directory name under the user cache.
-pub const STATE_DIR_NAME: &str = "autor3search-rust";
+pub const STATE_DIR_NAME: &str = "rustperf";
 
 /// Relocates every run's out-of-tree state, replacing the user-cache default.
 ///
@@ -22,7 +22,7 @@ pub const STATE_DIR_NAME: &str = "autor3search-rust";
 /// CI runner with no durable cache, and a test suite, which would otherwise
 /// accumulate a directory per temporary repository in the developer's real
 /// cache forever.
-pub const STATE_HOME_ENV: &str = "AUTOR3SEARCH_RUST_STATE_HOME";
+pub const STATE_HOME_ENV: &str = "RUSTPERF_STATE_HOME";
 
 /// Paths within a run's state directory. The frozen store and its manifest
 /// also live here, but their constants belong to [`crate::freeze`], which owns
@@ -197,7 +197,7 @@ impl Baseline {
             Ok(r) => r,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 return Err(format!(
-                    "no baseline at {}: run 'autor3search-rust baseline --tag <tag>' first",
+                    "no baseline at {}: run 'rustperf baseline --tag <tag>' first",
                     path.display()
                 ));
             }
@@ -322,7 +322,7 @@ pub fn claim_eval(state_dir: &Path) -> Result<EvalClaim, String> {
     if !locked {
         let existing = std::fs::read_to_string(&path).unwrap_or_default();
         return Err(format!(
-            "another autor3search-rust eval (pid {}) is already running for this run — two \
+            "another rustperf eval (pid {}) is already running for this run — two \
              concurrent evals would fight over the same pinned worktree",
             existing.trim()
         ));
@@ -412,7 +412,7 @@ pub fn claim_eval(state_dir: &Path) -> Result<EvalClaim, String> {
             if is_sharing_violation(&e) {
                 let existing = std::fs::read_to_string(&path).unwrap_or_default();
                 format!(
-                    "another autor3search-rust eval (pid {}) is already running for this run — two \
+                    "another rustperf eval (pid {}) is already running for this run — two \
                      concurrent evals would fight over the same pinned worktree",
                     existing.trim()
                 )
@@ -561,11 +561,8 @@ mod tests {
 
     #[test]
     fn branch_names_round_trip_with_their_tag() {
-        assert_eq!(branch_name("sep4"), "autor3search-rust/sep4");
-        assert_eq!(
-            tag_from_branch("autor3search-rust/sep4"),
-            Some("sep4".to_string())
-        );
+        assert_eq!(branch_name("sep4"), "rustperf/sep4");
+        assert_eq!(tag_from_branch("rustperf/sep4"), Some("sep4".to_string()));
         assert_eq!(tag_from_branch("main"), None);
         assert_eq!(tag_from_branch("feature/x"), None);
     }
@@ -652,7 +649,7 @@ mod tests {
     fn baseline() -> Baseline {
         Baseline {
             tag: "sep4".into(),
-            branch: "autor3search-rust/sep4".into(),
+            branch: "rustperf/sep4".into(),
             commit: "a3f1c2d".into(),
             measure_commit: "a3f1c2d".into(),
             created_at: "2026-09-08T12:00:00Z".into(),

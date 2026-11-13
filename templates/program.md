@@ -11,15 +11,15 @@ Before starting the loop, do this once:
 
 1. Agree a run tag with the human if one was not already given to you (a
    short slug like `sep4` — today's date or similar is fine).
-2. Confirm `autor3search-rust baseline --tag <tag>` has already been run for
+2. Confirm `rustperf baseline --tag <tag>` has already been run for
    this tag. If it has not, stop and ask the human to run it, or run it
    yourself if you have been told you may. `baseline` creates the run
    branch, freezes the current test files as the golden copies, and records
    the commit this run measures against. Everything downstream depends on
    this step having happened exactly once.
 3. Read the repository. Skim the package(s) named in `scope` in
-   `.autor3search/config.yaml`. Run the declared benchmarks yourself once
-   (`autor3search-rust profile`) so you know what you are starting from
+   `.rustperf/config.yaml`. Run the declared benchmarks yourself once
+   (`rustperf profile`) so you know what you are starting from
    before changing anything.
 
 ## Experimentation
@@ -27,14 +27,14 @@ Before starting the loop, do this once:
 What you MAY do:
 
 - Edit any Rust source file that falls under one of the `scope` patterns in
-  `.autor3search/config.yaml`.
+  `.rustperf/config.yaml`.
 - Add new files inside `scope`, as long as they are not new files under
   `tests/**` or `benches/**` that duplicate or replace existing tests.
 - Add a *new* benchmark inside `scope` — it will not count toward the score
   (the score only covers the declared `benchmarks` list) but it can help you
   reason about a hot path.
 - Run any read-only diagnostic command (`cargo check`, `cargo clippy`,
-  `autor3search-rust profile`) as often as you like between experiments.
+  `rustperf profile`) as often as you like between experiments.
 
 What you MUST NOT do:
 
@@ -67,7 +67,7 @@ What you MUST NOT do:
   `.cargo/config.toml` in particular can set `RUSTFLAGS` — adding
   `-C target-cpu=native` produces a real, reproducible speedup with no logic
   change at all, which is not what this run is measuring.
-- Edit `.autor3search/config.yaml`. It is not covered by the scope gate —
+- Edit `.rustperf/config.yaml`. It is not covered by the scope gate —
   the gate only sees ordinary source files, and this file is gitignored so
   it is invisible to it either way. Instead, its hash is recorded at
   `baseline` time; if it has changed by `eval` time, the run fails with
@@ -88,7 +88,7 @@ What you MUST NOT do:
 
 ## Output format
 
-`autor3search-rust eval` is the only command whose result decides anything.
+`rustperf eval` is the only command whose result decides anything.
 It exits with one of four codes, and program.md's loop below branches on
 exactly these:
 
@@ -144,10 +144,10 @@ with (at least) these fields:
   "stop_requested": false,
   "run": {
     "tag": "sep4",
-    "branch": "autor3search-rust/sep4",
+    "branch": "rustperf/sep4",
     "baseline_commit": "a3f1c2d",
     "measure_commit": "9b7e410",
-    "worktree": "/Users/you/Library/Caches/autor3search-rust/1a2b3c4d/sep4/baseline-worktree",
+    "worktree": "/Users/you/Library/Caches/rustperf/1a2b3c4d/sep4/baseline-worktree",
     "experiment": 5
   }
 }
@@ -210,7 +210,7 @@ the tree better than when the run started." Two consequences: (1) after a
 KEEP, running `eval` again with nothing new committed measures your last
 commit against itself and correctly `DISCARD`s — it is not a bug or a fluke;
 (2) a long, honest run's total progress is not any single `score` — it is the
-product of every kept `score`, which is what `autor3search-rust report`'s
+product of every kept `score`, which is what `rustperf report`'s
 "cumulative speedup" computes for the human.
 
 `run` is the context for the experiment just recorded: which run tag and
@@ -232,7 +232,7 @@ ran — you never poll for a stop request separately, and `status` has no
 `--json` form or `stop_requested` field of its own; it only ever prints plain
 text with the word `requested` or `not requested` in it, for a human to read.
 
-**A graceful stop.** The human runs `autor3search-rust stop`. That does not
+**A graceful stop.** The human runs `rustperf stop`. That does not
 touch you or the experiment you are running; it writes a request that the
 next `eval` reports back to you as `"stop_requested": true`, alongside a
 verdict that is still fully valid. When you see it:
@@ -241,7 +241,7 @@ verdict that is still fully valid. When you see it:
    commit, anything else is `git reset --hard HEAD~1`. A stop must never
    leave a commit on the branch that nothing decided on.
 2. Do NOT start another experiment.
-3. Run `autor3search-rust report` and summarize, in a few lines: what you
+3. Run `rustperf report` and summarize, in a few lines: what you
    tried, what was kept, and what you would try next if the run resumed.
 4. Exit the loop and say you have stopped because the human asked.
 
@@ -249,7 +249,7 @@ verdict that is still fully valid. When you see it:
 question from the verdict — it says whether to continue, not what this
 experiment was worth.
 
-**An interrupt.** The human presses Ctrl+C, or runs `autor3search-rust stop
+**An interrupt.** The human presses Ctrl+C, or runs `rustperf stop
 --force` because they could not wait for a long benchmark to finish. Either
 one cancels `eval` mid-experiment. You will see `"status": "ABORTED"` with
 `"reason": "stop_forced"`, exit code `2`, and no `results.tsv` row — nothing
@@ -257,7 +257,7 @@ was measured, so nothing was recorded. Treat the commit the way you would
 treat any FAIL (`git reset --hard HEAD~1`), then stop as above.
 
 If the human wants the run to continue after all, they clear the request with
-`autor3search-rust stop --clear`. That is their decision, not something to
+`rustperf stop --clear`. That is their decision, not something to
 wait for or ask about.
 
 ## Logging
@@ -266,8 +266,8 @@ wait for or ask about.
 automatically, on every invocation, KEEP or not. You must never create,
 append to, or edit `results.tsv` yourself — any manual write is either
 redundant (the row already exists) or corrupts a file the harness parses
-strictly, which fails the human's morning `autor3search-rust report`, or a
-future `autor3search-rust baseline --force`, on the whole file, not just your
+strictly, which fails the human's morning `rustperf report`, or a
+future `rustperf baseline --force`, on the whole file, not just your
 line.
 
 The columns the human sees are:
@@ -286,7 +286,7 @@ harness from the verdict — you do not control them. The one column that is
 yours is `description`, and you set it by passing `--desc` to `eval`:
 
 ```
-autor3search-rust eval --json --desc "preallocate the map"
+rustperf eval --json --desc "preallocate the map"
 ```
 
 Always pass `--desc`, on every invocation, KEEP or not — it is the only
@@ -314,7 +314,7 @@ DISCARD.
 
 ## Rust optimization idea bank
 
-Search rather than flail. Start from `autor3search-rust profile`, not from a guess.
+Search rather than flail. Start from `rustperf profile`, not from a guess.
 
 - **Allocation in a hot loop.** `String`/`Vec` growth without `with_capacity`;
   building a `String` a character at a time; `format!` where `write!` into a
@@ -366,15 +366,15 @@ LOOP FOREVER:
 
 0. Print one context line, so the human watching knows where the run is
    without having to read the JSON:
-   `[exp <n> | <branch> | vs <measure_commit> | stop: autor3search-rust stop]`
+   `[exp <n> | <branch> | vs <measure_commit> | stop: rustperf stop]`
    Take the numbers from the previous experiment's `run` object; on the first
-   pass, from `autor3search-rust status`.
+   pass, from `rustperf status`.
 1. Check git state: confirm you are on the run branch.
-2. If you have no strong hypothesis, run `autor3search-rust profile` and read
+2. If you have no strong hypothesis, run `rustperf profile` and read
    the hot spots.
 3. Change ONE thing in the in-scope Rust source. One idea per experiment.
 4. `git add -A && git commit -m "<idea>"`
-5. `autor3search-rust eval --json --desc "<idea>"` (no redirect — do NOT tee
+5. `rustperf eval --json --desc "<idea>"` (no redirect — do NOT tee
    or send stdout to `run.log`; either floods your context or clobbers the
    transcript, see "Logging" above). `--desc` is what lands in
    `results.tsv`'s `description` column for this experiment — always pass it.
