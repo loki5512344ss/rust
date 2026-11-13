@@ -54,7 +54,9 @@ Install and run rustperf on this repository, then optimize it.
 Setup:
 0. Run git status. If the working tree has changes, STOP and ask me to
    commit or stash them first.
-1. cargo install --locked --git https://github.com/loki5512344ss/rustperf
+1. Clone and build the harness (outside this repository):
+   git clone https://github.com/loki5512344ss/rustperf ~/rustperf
+   cargo install --locked --path ~/rustperf
    Make sure ~/.cargo/bin is on PATH.
 2. rustperf init
    Show me the benchmarks it discovered. If it reports none, STOP and tell
@@ -105,13 +107,12 @@ Two things worth knowing before you start it:
 ### Or install it as a skill
 
 The same prompt ships as an agent skill, in
-[`skills/rustperf`](skills/rustperf/SKILL.md). Install it once and ask your
-agent to make the repository faster; it loads the prompt itself.
+[`skills/rustperf`](skills/rustperf/SKILL.md). Clone the repository, then link the skill into your agent once and ask the
+agent to make a repository faster; it loads the prompt itself.
 
 ```sh
-mkdir -p ~/.claude/skills/rustperf
-curl -fsSL https://raw.githubusercontent.com/loki5512344ss/rustperf/main/skills/rustperf/SKILL.md \
-  -o ~/.claude/skills/rustperf/SKILL.md
+git clone https://github.com/loki5512344ss/rustperf ~/rustperf
+bash ~/rustperf/scripts/install-skill.sh --link   # symlink: `git pull` updates it
 ```
 
 ## The idea
@@ -156,7 +157,8 @@ without also erasing whatever real optimization sits next to them — see
 ## Quick start
 
 ```bash
-cargo install --locked --git https://github.com/loki5512344ss/rustperf
+git clone https://github.com/loki5512344ss/rustperf ~/rustperf
+cargo install --locked --path ~/rustperf        # puts `rustperf` in ~/.cargo/bin
 
 cd your-rust-project
 rustperf init                                # find benchmarks, write config + program.md
@@ -667,10 +669,10 @@ This branch is a fork. In addition to the upstream harness, it adds:
 - **New scripts** in `scripts/`: `instr-count.sh`, `layout-check.sh`,
   `vec-remarks.sh`, `perf-diff.sh`, `diff-fuzz.sh` (pre-existing:
   `bench-ab.sh`, `perf-report.sh`, `asm-report.sh`).
-- **Install** with `cargo install --locked --git https://github.com/loki5512344ss/rustperf`
-  or, from a checkout, `cargo install --path .`. The crate is named
-  `rustperf`; upstream's `autor3search-rust` on crates.io is a different
-  program without these changes.
+- **Install**: clone the repository and run `cargo install --locked --path .`
+  in it. The crate is named `rustperf` and is not published on crates.io;
+  upstream's `autor3search-rust` there is a different program without these
+  changes.
 
 See [`docs/fork-notes.md`](docs/fork-notes.md) for the full change table and
 skill details.
