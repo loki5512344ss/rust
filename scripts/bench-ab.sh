@@ -21,7 +21,10 @@ Options:
   --json FILE    write raw per-run times and summary to FILE
   -h, --help     show this help
 Extra args after the two commands go to hyperfine verbatim (--shell=none,
---export-markdown ...). Our --runs/--warmup/--export-json come last, so they
+--export-markdown ...). Commands run through sh (hyperfine --shell=default:
+hyperfine 2.0 alone word-splits them without a shell, so 'a && b' would
+silently measure the wrong thing); a --shell/-N extra comes later and wins.
+Our --runs/--warmup/--export-json come last, so they
 win over conflicting extras. Exit: 0 ok, 1 busy/failed run, 2 usage/tool.
 EOF
 }
@@ -95,7 +98,13 @@ for ((b = 0; b < BLOCKS; b++)); do
   CMDS=("$CMD_A" "$CMD_B")
   if [[ "$ORDER" == BA ]]; then CMDS=("$CMD_B" "$CMD_A"); fi
   printf 'block %d/%d: order %s, %d runs per command\n' "$((b + 1))" "$BLOCKS" "$ORDER" "$N"
-  hyperfine --warmup "$W" --runs "$N" "${PRE[@]}" "${EXTRA[@]}" \
+  # hyperfine 2.0 defaults to --shell=none: the command string is word-split
+  # and exec'd directly, so 'a && b', pipes or 'VAR=x cmd' are silently not
+  # what the caller wrote (the shell syntax becomes plain arguments to `a`).
+  # This script's contract is shell commands, so pass --shell=default (sh).
+  # It goes before EXTRA so a user-supplied --shell/-N still wins; hyperfine
+  # keeps the last --shell it is given.
+  hyperfine --shell=default --warmup "$W" --runs "$N" "${PRE[@]}" "${EXTRA[@]}" \
     --export-json "$FILE" -- "${CMDS[@]}" >/dev/null \
     || fail "hyperfine failed in block $((b + 1)) (command itself exited nonzero?)"
   FILES+=("$FILE")
@@ -110,7 +119,13 @@ for path in paths:
     order = "AB" if path.endswith("-AB.json") else "BA"
     with open(path, encoding="utf-8") as fh:
         res = json.load(fh)["results"]
-    ta, tb = (res[0]["times"], res[1]["times"]) if order == "AB" else (res[1]["times"], res[0]["times"])
+    # hyperfine 2.0 renamed the per-run list: "times" (seconds) became
+    # "measurements", one object per run with the time nested inside.
+    def runs_of(r):
+        if "times" in r:
+            return r["times"]
+        return [m["time_wall_clock"]["value"] for m in r["measurements"]]
+    ta, tb = (runs_of(res[0]), runs_of(res[1])) if order == "AB" else (runs_of(res[1]), runs_of(res[0]))
     raw["A"] += ta; raw["B"] += tb
     per.append((len(per) + 1, order, ta, tb))
 def quant(xs, p):
