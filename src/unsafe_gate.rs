@@ -23,6 +23,14 @@
 //! invariant an *unchanged* `unsafe` region relies on (deleting the bounds
 //! check in front of an existing `get_unchecked`). That needs a reviewer or
 //! Miri; the gate narrows the hole, it does not close it.
+//!
+//! Also not caught, found by an adversarial review and left open on purpose:
+//! calling an *existing* `macro_rules!` whose body contains `unsafe` from a new
+//! site; a changed non-`.rs` file pulled in by an unchanged `include!`; and
+//! `build.rs` output when `build.rs` is inside the scope. Known false
+//! positives, kept because they err on the safe side: any edit inside an
+//! `unsafe fn` body (edition <= 2021 treats the whole body as unsafe) and any
+//! edit to a default method of an `unsafe trait`.
 
 use proc_macro2::{Delimiter, Group, TokenStream, TokenTree};
 use std::collections::BTreeMap;
@@ -69,7 +77,7 @@ pub fn regions(source: &str) -> Vec<Region> {
     match strip_shebang(source).parse::<TokenStream>() {
         Ok(tokens) => {
             let mut out = Vec::new();
-            collect(tokens, &mut out);
+            collect(tokens, false, &mut out);
             out
         }
         Err(_) if source.contains("unsafe") => vec![Region {
@@ -82,25 +90,40 @@ pub fn regions(source: &str) -> Vec<Region> {
 }
 
 /// `#!/usr/bin/env ...` is valid on the first line of a Rust file but is not a
-/// token; `#![attr]` on the first line is an attribute and must be kept.
+/// token. rustc's rule: it is a shebang unless the next token after `#!`
+/// (skipping whitespace and comments) is `[`, in which case it is an inner
+/// attribute and must be kept — `#! [allow(x)]` and `#!/**/[allow(x)]` are
+/// attributes too, so a plain `starts_with("#![")` test is not enough.
 fn strip_shebang(source: &str) -> &str {
-    if source.starts_with("#!") && !source.starts_with("#![") {
-        match source.find('\n') {
-            Some(end) => &source[end..],
-            None => "",
+    let Some(mut rest) = source.strip_prefix("#!") else {
+        return source;
+    };
+    loop {
+        rest = rest.trim_start();
+        if let Some(after) = rest.strip_prefix("/*") {
+            rest = after.find("*/").map_or("", |end| &after[end + 2..]);
+        } else if let Some(after) = rest.strip_prefix("//") {
+            rest = after.find('\n').map_or("", |end| &after[end..]);
+        } else {
+            break;
         }
-    } else {
-        source
+    }
+    if rest.starts_with('[') {
+        return source;
+    }
+    match source.find('\n') {
+        Some(end) => &source[end..],
+        None => "",
     }
 }
 
-fn collect(tokens: TokenStream, out: &mut Vec<Region>) {
+fn collect(tokens: TokenStream, in_attr: bool, out: &mut Vec<Region>) {
     let trees: Vec<TokenTree> = tokens.into_iter().collect();
     let mut i = 0;
     while i < trees.len() {
         match &trees[i] {
             TokenTree::Ident(ident) if ident == "unsafe" => {
-                let end = region_end(&trees, i);
+                let end = region_end(&trees, i, in_attr);
                 out.push(Region {
                     fingerprint: fingerprint(&trees[i..end]),
                     line: ident.span().start().line,
@@ -108,8 +131,60 @@ fn collect(tokens: TokenStream, out: &mut Vec<Region>) {
                 });
                 i = end;
             }
+            // `#[no_mangle]`, `#[export_name]`, `#[link_section]`, `#[path]`
+            // and `#[unsafe(..)]` need no `unsafe` keyword before edition
+            // 2024, or none outside the attribute, yet they replace symbols
+            // such as `malloc`, place code in `.init_array` or compile a file
+            // the gate never reads. The region is the attribute plus the item
+            // it is attached to, so retargeting the item changes the region.
+            TokenTree::Punct(hash)
+                if hash.as_char() == '#'
+                    && matches!(trees.get(i + 1), Some(TokenTree::Group(g))
+                        if g.delimiter() == Delimiter::Bracket && is_sensitive_attribute(g)) =>
+            {
+                let end = region_end(&trees, i, false);
+                out.push(Region {
+                    fingerprint: fingerprint(&trees[i..end]),
+                    line: hash.span().start().line,
+                    what: match &trees[i + 1] {
+                        TokenTree::Group(g) if mentions_unsafe(g.stream()) => {
+                            "unsafe attribute".to_string()
+                        }
+                        _ => "attribute that changes linkage or loads a file".to_string(),
+                    },
+                });
+                i = end;
+            }
+            // `include!`, `global_asm!`, `asm!` and a keyword-less foreign
+            // block `extern "C" { .. }` are code the compiler takes from
+            // somewhere the token scan cannot follow.
+            TokenTree::Ident(ident) if is_opaque_macro(ident) && is_bang_group(&trees, i + 1) => {
+                out.push(Region {
+                    fingerprint: fingerprint(&trees[i..i + 3]),
+                    line: ident.span().start().line,
+                    what: format!("{ident}! invocation"),
+                });
+                i += 3;
+            }
+            TokenTree::Ident(ident)
+                if ident == "extern"
+                    && matches!(trees.get(i + 1), Some(TokenTree::Literal(_)))
+                    && matches!(trees.get(i + 2), Some(TokenTree::Group(g))
+                        if g.delimiter() == Delimiter::Brace) =>
+            {
+                out.push(Region {
+                    fingerprint: fingerprint(&trees[i..i + 3]),
+                    line: ident.span().start().line,
+                    what: "extern block".to_string(),
+                });
+                i += 3;
+            }
             TokenTree::Group(group) => {
-                collect(group.stream(), out);
+                let attr = in_attr
+                    || (group.delimiter() == Delimiter::Bracket
+                        && matches!(i.checked_sub(1).and_then(|p| trees.get(p)),
+                            Some(TokenTree::Punct(p)) if matches!(p.as_char(), '#' | '!')));
+                collect(group.stream(), attr, out);
                 i += 1;
             }
             _ => i += 1,
@@ -117,10 +192,52 @@ fn collect(tokens: TokenStream, out: &mut Vec<Region>) {
     }
 }
 
+fn is_opaque_macro(ident: &proc_macro2::Ident) -> bool {
+    ["include", "global_asm", "asm", "naked_asm"]
+        .iter()
+        .any(|name| ident == name)
+}
+
+/// `! ( .. )` / `! [ .. ]` / `! { .. }` starting at `index`.
+fn is_bang_group(trees: &[TokenTree], index: usize) -> bool {
+    matches!(trees.get(index), Some(TokenTree::Punct(p)) if p.as_char() == '!')
+        && matches!(trees.get(index + 1), Some(TokenTree::Group(_)))
+}
+
+fn is_sensitive_attribute(group: &Group) -> bool {
+    let mut inner = group.stream().into_iter();
+    match inner.next() {
+        Some(TokenTree::Ident(first)) => {
+            [
+                "no_mangle",
+                "export_name",
+                "link_section",
+                "link_name",
+                "path",
+                "unsafe",
+            ]
+            .iter()
+            .any(|name| first == name)
+                || (first == "cfg_attr" && mentions_unsafe(group.stream()))
+        }
+        _ => false,
+    }
+}
+
+fn mentions_unsafe(tokens: TokenStream) -> bool {
+    tokens.into_iter().any(|tree| match tree {
+        TokenTree::Ident(ident) => ident == "unsafe",
+        TokenTree::Group(group) => mentions_unsafe(group.stream()),
+        _ => false,
+    })
+}
+
 /// The index one past the last token of the region starting at `start`.
-fn region_end(trees: &[TokenTree], start: usize) -> usize {
+fn region_end(trees: &[TokenTree], start: usize, in_attr: bool) -> usize {
     // `#[unsafe(no_mangle)]`: the keyword is followed directly by parentheses.
-    if let Some(TokenTree::Group(group)) = trees.get(start + 1) {
+    // Only inside an attribute: elsewhere (a macro passing `unsafe` through)
+    // the parentheses are not the whole region.
+    if let (true, Some(TokenTree::Group(group))) = (in_attr, trees.get(start + 1)) {
         if group.delimiter() == Delimiter::Parenthesis {
             return start + 2;
         }
@@ -499,5 +616,54 @@ trait W { unsafe fn e(); }
         let found = added(&base, &cand);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].file, "b.rs");
+    }
+
+    #[test]
+    fn a_shebang_lookalike_that_is_an_attribute_is_scanned() {
+        for source in [
+            "#! [allow(unused)] fn g(p: *const u8) -> u8 { unsafe { *p } }",
+            "#!/**/[allow(unused)] fn g(p: *const u8) -> u8 { unsafe { *p } }",
+        ] {
+            assert_eq!(one(source).len(), 1, "{source}");
+        }
+        assert!(one("#!/usr/bin/env run\nfn f() {}").is_empty());
+    }
+
+    #[test]
+    fn linkage_attributes_without_the_keyword_are_regions() {
+        for source in [
+            "#[no_mangle] pub extern \"C\" fn malloc() {}",
+            "#[export_name = \"x\"] fn f() {}",
+            "#[link_section = \".init_array\"] #[used] static S: u8 = 0;",
+            "#[cfg_attr(all(), unsafe(no_mangle))] fn f() {}",
+            "extern \"C\" { fn abs(i: i32) -> i32; }",
+            "core::arch::global_asm!(\"nop\");",
+        ] {
+            assert_eq!(one(source).len(), 1, "{source}: {:?}", one(source));
+        }
+    }
+
+    #[test]
+    fn include_and_path_are_regions() {
+        assert_eq!(one("include!(\"evil.rs\");").len(), 1);
+        assert_eq!(one("#[path = \"../x.rs\"] mod evil;").len(), 1);
+        assert!(one("const S: &str = include_str!(\"a.txt\");").is_empty());
+    }
+
+    #[test]
+    fn retargeting_an_unsafe_attribute_changes_the_region() {
+        let base = files(&[("a.rs", "#[unsafe(no_mangle)] pub extern \"C\" fn f() {}")]);
+        let cand = files(&[(
+            "a.rs",
+            "#[unsafe(no_mangle)] pub extern \"C\" fn memset() {}",
+        )]);
+        assert_eq!(added(&base, &cand).len(), 1);
+    }
+
+    #[test]
+    fn a_passed_through_unsafe_paren_is_not_a_short_region() {
+        let base = files(&[("a.rs", "#[unsafe(no_mangle)] fn f() {}")]);
+        let cand = files(&[("a.rs", "m!(unsafe(no_mangle) { *p.get_unchecked(1) });")]);
+        assert!(!added(&base, &cand).is_empty());
     }
 }

@@ -39,7 +39,7 @@ untouched.
 | `gitx::file_at` | `src/gitx.rs` | reads a file as of a commit, for the gate |
 
 Why the gate works on tokens and what it cannot see is written at the top of
-`src/unsafe_gate.rs`. Tests: 18 unit tests in that module, 6 gate tests in
+`src/unsafe_gate.rs`. Tests: 23 unit tests in that module, 6 gate tests in
 `tests/pipeline_gates.rs`, and the two real-benchmark tests in
 `tests/cmd_eval.rs` (`--ignored`) assert the `benchmarks` rows on KEEP and on
 DISCARD.
@@ -84,6 +84,14 @@ Key design choices:
 - **The harness only reads criterion.** `hyperfine` proves a CLI-level win by
   hand but cannot feed `eval`; adding a bench target is a `Cargo.toml` change
   and therefore a locked-file, human decision.
+- **Gate review (2026-11-13).** An adversarial pass found 8 bypasses by running
+  them. Closed: `include!`/`global_asm!`/`asm!`/`#[path]` and keyword-less
+  `extern "C" {}` are now regions; `#[no_mangle]`, `#[export_name]`,
+  `#[link_section]`, `#[unsafe(..)]` cover the attached item; `#! [attr]` is no
+  longer mistaken for a shebang; `unsafe(..)` is a short region only inside an
+  attribute. Open (documented in `src/unsafe_gate.rs`): reuse of an existing
+  unsafe macro, non-`.rs` include targets, `build.rs` in scope, and a deleted
+  precondition in front of an unchanged block. The gate is a filter, not a proof.
 - **No `unsafe` as an optimization.** This fork's harness refuses an
   experiment that adds or changes an `unsafe` region; upstream's has no gate
   (verified in `src/`). The skill forbids `unsafe` either way unless the whole
