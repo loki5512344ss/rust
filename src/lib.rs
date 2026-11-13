@@ -21,4 +21,5 @@ pub mod runner;
 pub mod scope;
 pub mod state;
 pub mod stats;
+pub mod unsafe_gate;
 pub mod verdict;

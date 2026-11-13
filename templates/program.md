@@ -49,6 +49,14 @@ What you MUST NOT do:
   the file would erase your optimization too. Instead they are hashed at
   baseline, and any change to one fails the experiment with reason
   `inline_test_modified`. Revert the test and re-run.
+- Add or change `unsafe` code: an `unsafe { }` block, an `unsafe fn`, an
+  `unsafe impl`, an `#[unsafe(..)]` attribute, or anything inside one that
+  already exists. The tests and the benchmark both pass on undefined
+  behaviour, so the harness cannot tell a sound `get_unchecked` from an
+  unsound one and accepts neither: the experiment fails with reason
+  `unsafe_added` before anything is built. Removing `unsafe`, or moving an
+  existing region without changing it, is fine. Get the speed in safe code —
+  iterators, `chunks_exact`, a length check hoisted out of the loop.
 - Edit `Cargo.toml`, `Cargo.lock`, `.cargo/config.toml`, `.cargo/config`,
   `rust-toolchain.toml` or `rust-toolchain`, ever. These are rejected outright
   regardless of what `scope` says — both spellings of the cargo-config and
@@ -74,9 +82,9 @@ What you MUST NOT do:
   means.
 - Batch multiple unrelated changes into one experiment. One idea per
   experiment keeps every result attributable and every discard cheap.
-- Reach for `unsafe` as a shortcut to a faster number. See the note at the
-  end of the idea bank below: it is not gated in this version, and that is a
-  gap in the harness, not permission from it.
+- Reach for `unsafe` as a shortcut to a faster number. It is gated in this
+  fork: `eval` fails with `unsafe_added` before the build, so the experiment
+  costs a slot and changes nothing. See the note at the end of the idea bank.
 
 ## Output format
 
@@ -120,6 +128,19 @@ with (at least) these fields:
   "message": "score 0.9123 (-8.77%)",
   "regressions": [],
   "warnings": [],
+  "benchmarks": [
+    {
+      "name": "count_words/large",
+      "base_ns": 44702.0,
+      "cand_ns": 38636.0,
+      "pct_change": -13.57,
+      "p": 0.00001,
+      "significant": true,
+      "keep_threshold_p": 0.025,
+      "n_base": 10,
+      "n_cand": 10
+    }
+  ],
   "stop_requested": false,
   "run": {
     "tag": "sep4",
@@ -137,8 +158,19 @@ not a verdict at all but an interrupted experiment; see "Stopping" below.
 `reason` is a stable, machine-readable code, e.g. `improved`,
 `no_significant_improvement`, `improvement_below_min_effect`,
 `guard_regression`, `scope_violation`, `config_changed`,
-`inline_test_modified`, `new_test_file`, `missing_test_file`, `build_failed`,
+`inline_test_modified`, `unsafe_added`, `new_test_file`, `missing_test_file`, `build_failed`,
 `tests_failed`, `timeout`, `stop_forced`.
+
+`benchmarks` has one row per measured benchmark and is present whenever the
+experiment got as far as measurement — on `KEEP` and on `DISCARD`. Read it
+before choosing the next experiment: `pct_change` is the change in the median
+(negative is faster), `p` is that benchmark's own p-value, and
+`keep_threshold_p` is the bar at least one benchmark has to clear for a
+`KEEP`. One benchmark at -8% with the rest flat is a different situation from
+every benchmark at -1%, and the single `score` cannot tell you which you have.
+The key is absent on `FAIL`, `CRASH` and `ABORTED`, where nothing was
+measured, and `regressions` and `warnings` are omitted when empty — do not
+require any of the three.
 
 Two of those discard reasons mean genuinely different things, and the
 difference should change what you do next. `no_significant_improvement`
@@ -309,10 +341,11 @@ Search rather than flail. Start from `autor3search-rust profile`, not from a gue
 
 Two notes specific to this harness. There are **no allocation counts** —
 criterion measures time only — so an allocation hypothesis has to be confirmed
-by the clock, not by a counter. And **`unsafe` is not gated**: `get_unchecked`
-will genuinely be faster and will genuinely pass the tests, and it buys that
-speed with undefined behaviour on any input the tests do not cover. Do not
-reach for it.
+by the clock, not by a counter. And **`unsafe` is gated** against new or
+changed regions: `get_unchecked` will genuinely be faster and will genuinely
+pass the tests, but `eval` fails the experiment with `unsafe_added` before it
+is built, and the speed would be bought with undefined behaviour on any input
+the tests do not cover. Do not reach for it.
 
 ## What this harness cannot see, so don't rely on it
 

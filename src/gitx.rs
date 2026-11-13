@@ -138,6 +138,69 @@ pub fn changed_since(dir: &Path, commit: &str) -> Result<Vec<String>, String> {
     Ok(paths)
 }
 
+/// Old paths of files git detected as renamed since `commit`.
+///
+/// [`changed_since`] reports only the new path of a rename — both
+/// `git diff --name-only` and `git status` collapse `old -> new` — which is
+/// the right answer for the scope gate but loses the baseline's side of the
+/// pair. A caller that compares *contents* against the baseline needs the old
+/// path too: the baseline copy lives under it, and without it a renamed file
+/// holding unchanged `unsafe` looks like new `unsafe`. The unsafe gate adds
+/// these paths to its own list for exactly that reason.
+///
+/// `-M` enables rename detection; `--name-status -z` emits
+/// `R100\0<old>\0<new>\0` for a rename and `<status>\0<path>\0` otherwise.
+pub fn rename_sources_since(dir: &Path, commit: &str) -> Result<Vec<String>, String> {
+    let bytes = git_raw(dir, &["diff", "--name-status", "-z", "-M", commit])?;
+    let text = String::from_utf8(bytes)
+        .map_err(|e| format!("git diff --name-status output is not UTF-8: {e}"))?;
+    let fields: Vec<&str> = text.split('\0').collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < fields.len() {
+        let status = fields[i];
+        if status.is_empty() {
+            i += 1;
+            continue;
+        }
+        if status.starts_with('R') {
+            if let Some(old) = fields.get(i + 1) {
+                if !old.is_empty() {
+                    out.push(old.to_string());
+                }
+            }
+            i += 3; // status, old path, new path
+        } else {
+            i += 2; // status, path
+        }
+    }
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
+/// The text of `rel` as it was at `commit`, or `None` if the file did not
+/// exist there.
+///
+/// Existence is asked separately (`cat-file -e`) rather than inferred from a
+/// failed `show`: a failure to run git at all must stay an error, not read as
+/// "the file is new" — which for the unsafe gate would mean comparing the
+/// candidate against an empty baseline and blaming it for every `unsafe` the
+/// repository already had.
+pub fn file_at(dir: &Path, commit: &str, rel: &str) -> Result<Option<String>, String> {
+    let spec = format!("{commit}:{rel}");
+    let exists = Command::new("git")
+        .args(["cat-file", "-e", &spec])
+        .current_dir(dir)
+        .output()
+        .map_err(|e| format!("run git cat-file -e {spec}: {e}"))?;
+    if !exists.status.success() {
+        return Ok(None);
+    }
+    let bytes = git_raw(dir, &["show", &spec])?;
+    Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
+}
+
 /// Whether a local branch exists.
 pub fn branch_exists(dir: &Path, name: &str) -> Result<bool, String> {
     let refname = format!("refs/heads/{name}");
@@ -291,6 +354,28 @@ mod tests {
         let mut changed = changed_since(&r.root, &base).unwrap();
         changed.sort();
         assert_eq!(changed, vec!["a.txt", "src/b.rs"]);
+    }
+
+    // The unsafe gate compares file contents against the baseline, so the old
+    // path of a rename is load-bearing: `changed_since` reports only the new
+    // one, and the baseline copy of the region lives under the old name.
+    #[test]
+    fn rename_sources_since_reports_the_old_path_staged_or_committed() {
+        let r = repo();
+        let base = head_commit(&r.root).unwrap();
+        git(&r.root, &["mv", "a.txt", "b.txt"]);
+        assert_eq!(rename_sources_since(&r.root, &base).unwrap(), vec!["a.txt"]);
+        git(&r.root, &["commit", "-qm", "rename"]);
+        assert_eq!(rename_sources_since(&r.root, &base).unwrap(), vec!["a.txt"]);
+    }
+
+    #[test]
+    fn rename_sources_since_is_empty_without_a_rename() {
+        let r = repo();
+        let base = head_commit(&r.root).unwrap();
+        fs::write(r.root.join("a.txt"), "two\n").unwrap();
+        fs::write(r.root.join("new.txt"), "unrelated\n").unwrap();
+        assert!(rename_sources_since(&r.root, &base).unwrap().is_empty());
     }
 
     // The scope gate must see uncommitted work too, or an agent could edit

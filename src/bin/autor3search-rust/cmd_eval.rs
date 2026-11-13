@@ -178,6 +178,14 @@ fn eval(args: &Args) -> Result<i32, String> {
         let mut value =
             serde_json::to_value(&result).map_err(|e| format!("encode verdict: {e}"))?;
         if let serde_json::Value::Object(map) = &mut value {
+            // Fork addition. Present whenever measurement ran — KEEP and
+            // DISCARD alike — and absent for a gate failure, which never
+            // measured anything. Without it the agent learns one geomean and
+            // cannot tell "everything moved 1%" from "one benchmark moved 8%
+            // and three did not", which call for different next experiments.
+            if let Some(m) = &measurements {
+                map.insert("benchmarks".to_string(), benchmark_rows(&m.time));
+            }
             map.insert("stop_requested".to_string(), json!(stop_requested));
             map.insert("run".to_string(), run_obj);
         }
@@ -197,12 +205,60 @@ fn eval(args: &Args) -> Result<i32, String> {
         for d in &result.regressions {
             println!("  regression: {} {:+.1}%", d.name, d.pct_change);
         }
+        if let Some(m) = &measurements {
+            for d in &m.time {
+                println!(
+                    "  {}: {:.1} ns -> {:.1} ns ({:+.2}%, p={:.4}{})",
+                    d.name,
+                    d.base_center,
+                    d.cand_center,
+                    d.pct_change,
+                    d.p,
+                    if d.significant {
+                        ""
+                    } else {
+                        ", not significant"
+                    }
+                );
+            }
+        }
         if stop_requested {
             println!("NOTE: a stop has been requested — end the loop after this experiment");
         }
     }
 
     Ok(result.exit_code())
+}
+
+/// One row per measured benchmark for the JSON verdict.
+///
+/// A deliberately smaller shape than `bench::Delta`'s own serialization:
+/// `ratio` duplicates `pct_change`, and the per-delta warnings are already
+/// merged into the verdict's top-level `warnings`. `significant` is at the
+/// raw alpha, exactly as in `regressions`; `keep_threshold_p` is the
+/// Bonferroni-corrected bar a benchmark must clear to justify a KEEP, given
+/// here so a reader does not have to know the benchmark count to interpret
+/// `p`.
+fn benchmark_rows(deltas: &[autor3search::bench::Delta]) -> serde_json::Value {
+    let k = deltas.len().max(1) as f64;
+    serde_json::Value::Array(
+        deltas
+            .iter()
+            .map(|d| {
+                json!({
+                    "name": d.name,
+                    "base_ns": d.base_center,
+                    "cand_ns": d.cand_center,
+                    "pct_change": d.pct_change,
+                    "p": d.p,
+                    "significant": d.significant,
+                    "keep_threshold_p": d.alpha / k,
+                    "n_base": d.n_base,
+                    "n_cand": d.n_cand,
+                })
+            })
+            .collect(),
+    )
 }
 
 /// The exact string a `Status` or `Reason` serializes to (`"KEEP"`,

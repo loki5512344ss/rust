@@ -65,6 +65,16 @@ pub struct Config {
     /// Test files deliberately exempted from freezing. Human-only.
     #[serde(default)]
     pub unfreeze: Vec<String>,
+    /// Lets a candidate add or change `unsafe` code. Human-only, and off by
+    /// default: see [`crate::unsafe_gate`]. Omitted from a written config
+    /// while it is off, so a config from before the gate existed and one
+    /// written after it hash the same.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_unsafe: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn default_scope() -> Vec<String> {
@@ -106,6 +116,7 @@ impl Default for Config {
             min_effect_pct: default_min_effect(),
             timeout: default_timeout(),
             unfreeze: Vec::new(),
+            allow_unsafe: false,
         }
     }
 }

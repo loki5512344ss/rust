@@ -32,6 +32,7 @@ pub enum Reason {
     ScopeViolation,
     ConfigChanged,
     InlineTestModified,
+    UnsafeAdded,
     NewTestFile,
     MissingTestFile,
     SymlinkSwap,

@@ -55,6 +55,27 @@ fn a_genuine_optimization_is_kept_and_advances_the_measurement_commit() {
     assert_eq!(json["status"], "KEEP", "{json}");
     assert_eq!(out.status.code(), Some(0));
 
+    // Fork addition: every measured benchmark is reported, not just the
+    // geomean, so the agent can see WHICH benchmark moved.
+    let rows = json["benchmarks"]
+        .as_array()
+        .expect("benchmarks array on KEEP");
+    assert!(!rows.is_empty(), "{json}");
+    for row in rows {
+        assert!(row["name"].is_string(), "{row}");
+        assert!(row["base_ns"].as_f64().unwrap() > 0.0, "{row}");
+        assert!(row["cand_ns"].as_f64().unwrap() > 0.0, "{row}");
+        assert!(
+            row["p"].is_number() && row["pct_change"].is_number(),
+            "{row}"
+        );
+        assert!(row["keep_threshold_p"].as_f64().unwrap() <= 0.05, "{row}");
+    }
+    assert!(
+        rows.iter().any(|r| r["pct_change"].as_f64().unwrap() < 0.0),
+        "a KEEP must show at least one benchmark that got faster: {json}"
+    );
+
     // The measurement baseline must advance, or a later no-op would coast to
     // KEEP on this win. Located by walking the repo's own state home
     // (`common::state_dir`) rather than calling `state::state_dir` directly:
@@ -88,6 +109,15 @@ fn a_comment_only_change_is_discarded() {
     let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(json["status"], "DISCARD", "{json}");
     assert_eq!(out.status.code(), Some(1));
+    // The per-benchmark rows matter most on a DISCARD: they are what tells a
+    // change that did nothing from one that helped one benchmark too little.
+    assert!(
+        !json["benchmarks"]
+            .as_array()
+            .expect("benchmarks array on DISCARD")
+            .is_empty(),
+        "{json}"
+    );
 }
 
 // `stop --force` must be able to abort a real, in-flight eval: not just

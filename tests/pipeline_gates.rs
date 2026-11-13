@@ -458,3 +458,138 @@ fn a_tampered_frozen_store_fails_rather_than_restoring_the_weakened_copy() {
     let r = eval_now(&repo, cfg, base, &dir);
     assert_eq!(r.reason, verdict::Reason::FrozenStoreTampered);
 }
+
+// ---- Fork addition: the unsafe gate -------------------------------------
+
+/// Replaces the demo crate's `count_words` body-adjacent code by appending a
+/// function, which is the smallest edit that stays inside `src/**`.
+fn append_to_lib(repo: &TestRepo, code: &str) {
+    let p = repo.path().join("src/lib.rs");
+    let mut text = std::fs::read_to_string(&p).unwrap();
+    text.push_str(code);
+    std::fs::write(&p, text).unwrap();
+}
+
+/// Makes an eval that gets PAST the unsafe gate stop at the new-test-file
+/// gate a few steps later, instead of going on to a release build and a
+/// benchmark run. Asserting on that later gate's reason proves the unsafe
+/// gate let the change through, in milliseconds rather than minutes.
+fn stop_at_the_next_gate(repo: &TestRepo) {
+    std::fs::write(repo.path().join("tests/extra.rs"), "#[test]\nfn t() {}\n").unwrap();
+}
+
+// The cheat this gate exists for: tests pass, the benchmark improves, and the
+// program now has undefined behaviour on an input nobody benchmarked.
+#[test]
+fn adding_an_unsafe_block_fails_before_anything_is_built() {
+    let repo = TestRepo::demo();
+    let (cfg, base, dir) = ready(&repo);
+    append_to_lib(
+        &repo,
+        "\npub fn first(v: &[u8]) -> u8 {\n    unsafe { *v.get_unchecked(0) }\n}\n",
+    );
+    let r = eval_now(&repo, cfg, base, &dir);
+    assert_eq!(r.status, verdict::Status::Fail);
+    assert_eq!(r.reason, verdict::Reason::UnsafeAdded);
+    assert!(r.message.contains("src/lib.rs:"), "{}", r.message);
+    assert!(r.message.contains("unsafe { .. } block"), "{}", r.message);
+    // Refused on source text alone: no build directory may have appeared.
+    assert!(
+        !repo.path().join("target").exists(),
+        "the unsafe gate must run before the build"
+    );
+}
+
+// Committing the edit must not hide it: the gate diffs against the frozen
+// baseline commit, not against HEAD.
+#[test]
+fn a_committed_unsafe_fn_fails_too() {
+    let repo = TestRepo::demo();
+    let (cfg, base, dir) = ready(&repo);
+    append_to_lib(
+        &repo,
+        "\npub unsafe fn raw(p: *const u8) -> u8 {\n    *p\n}\n",
+    );
+    common::git(repo.path(), &["commit", "-qam", "raw"]);
+    let r = eval_now(&repo, cfg, base, &dir);
+    assert_eq!(r.reason, verdict::Reason::UnsafeAdded);
+    assert!(r.message.contains("unsafe fn raw"), "{}", r.message);
+}
+
+#[test]
+fn unsafe_in_a_brand_new_source_file_fails() {
+    let repo = TestRepo::demo();
+    let (cfg, base, dir) = ready(&repo);
+    std::fs::write(
+        repo.path().join("src/fast.rs"),
+        "pub fn first(v: &[u8]) -> u8 {\n    unsafe { *v.as_ptr() }\n}\n",
+    )
+    .unwrap();
+    let r = eval_now(&repo, cfg, base, &dir);
+    assert_eq!(r.reason, verdict::Reason::UnsafeAdded);
+    assert!(r.message.contains("src/fast.rs:2"), "{}", r.message);
+}
+
+// The word in a comment or a string is not code, and must not cost an
+// experiment: a false FAIL here would teach the agent to stop writing
+// SAFETY-style explanations.
+#[test]
+fn mentioning_unsafe_in_a_comment_does_not_trip_the_gate() {
+    let repo = TestRepo::demo();
+    let (cfg, base, dir) = ready(&repo);
+    append_to_lib(
+        &repo,
+        "\n// No unsafe here: the bounds check is hoisted instead.\n\
+         pub fn label() -> &'static str {\n    \"unsafe\"\n}\n",
+    );
+    stop_at_the_next_gate(&repo);
+    let r = eval_now(&repo, cfg, base, &dir);
+    assert_eq!(r.reason, verdict::Reason::NewTestFile, "{}", r.message);
+}
+
+// A rename is a move, not new `unsafe`. Git reports only the new path, so
+// without the old path the unsafe gate compares the renamed file against an
+// empty baseline and blames it for `unsafe` the baseline already had.
+//
+// The experiment still fails, a few steps later: `verify_inline` fails closed
+// on a missing source path on purpose ("absence must never look identical to
+// presence"), because a file moved somewhere uncompiled would take its
+// `#[cfg(test)]` tests out of the build. Asserting that later reason is what
+// proves the unsafe gate let the rename through.
+#[test]
+fn renaming_a_file_does_not_trip_the_unsafe_gate() {
+    let repo = TestRepo::demo();
+    std::fs::write(
+        repo.path().join("src/raw.rs"),
+        "pub unsafe fn raw(p: *const u8) -> u8 {\n    *p\n}\n",
+    )
+    .unwrap();
+    common::git(repo.path(), &["add", "src/raw.rs"]);
+    common::git(repo.path(), &["commit", "-qm", "raw"]);
+    let (cfg, base, dir) = ready(&repo);
+    common::git(repo.path(), &["mv", "src/raw.rs", "src/raw_renamed.rs"]);
+    let r = eval_now(&repo, cfg, base, &dir);
+    assert_eq!(
+        r.reason,
+        verdict::Reason::InlineTestModified,
+        "{}",
+        r.message
+    );
+}
+
+// Human override. The flag lives in the config, which is hash-locked at
+// baseline, so the agent cannot flip it mid-run — that is checked by the
+// config gate's own test; here only that the flag does what it says.
+#[test]
+fn allow_unsafe_in_the_config_lifts_the_gate() {
+    let repo = TestRepo::demo();
+    let (mut cfg, base, dir) = ready(&repo);
+    cfg.allow_unsafe = true;
+    append_to_lib(
+        &repo,
+        "\npub fn first(v: &[u8]) -> u8 {\n    unsafe { *v.get_unchecked(0) }\n}\n",
+    );
+    stop_at_the_next_gate(&repo);
+    let r = eval_now(&repo, cfg, base, &dir);
+    assert_eq!(r.reason, verdict::Reason::NewTestFile, "{}", r.message);
+}

@@ -14,6 +14,7 @@ use crate::measure;
 use crate::results;
 use crate::scope;
 use crate::state::{self, Baseline};
+use crate::unsafe_gate;
 use crate::verdict::{self, Reason, Status, VerdictResult};
 use std::io::Write;
 use std::path::PathBuf;
@@ -231,6 +232,72 @@ pub fn eval(
             ),
             None,
         ));
+    }
+
+    // 3b. No new or changed `unsafe` (fork addition). Runs on source text
+    //     alone, so it sits before the build: an experiment that is going to
+    //     be refused should not cost a release build and a test run first.
+    //
+    //     Like the scope gate it compares against baseline.commit, the frozen
+    //     anchor, so the whole accumulated diff is re-checked on every eval.
+    //     tests/ and benches/ are skipped for the reason the scope gate skips
+    //     them: step 4 restores those files, so what is on disk now is not
+    //     what will be built.
+    if !o.cfg.allow_unsafe {
+        // A rename is a move, not new code. `changed` carries only the new
+        // path, so add the old one: the baseline copy of an unchanged
+        // `unsafe` region lives there, and without it the gate would call a
+        // pure rename new unsafe code.
+        let mut scan_paths = changed.clone();
+        scan_paths.extend(gitx::rename_sources_since(&o.root, &o.baseline.commit)?);
+        scan_paths.sort();
+        scan_paths.dedup();
+        let mut base_sources: Vec<(String, String)> = Vec::new();
+        let mut cand_sources: Vec<(String, String)> = Vec::new();
+        for rel in &scan_paths {
+            if !rel.ends_with(".rs") || rel.starts_with("tests/") || rel.starts_with("benches/") {
+                continue;
+            }
+            if let Some(text) = gitx::file_at(&o.root, &o.baseline.commit, rel)? {
+                base_sources.push((rel.clone(), text));
+            }
+            // Absent on disk means the candidate deleted it: nothing to scan.
+            // Read as bytes and converted lossily so that a file which is not
+            // valid UTF-8 is still scanned rather than waved through — rustc
+            // will reject it at the build gate, but that is its job, not a
+            // reason for this gate to look away.
+            match std::fs::read(o.root.join(rel)) {
+                Ok(bytes) => {
+                    cand_sources.push((rel.clone(), String::from_utf8_lossy(&bytes).into_owned()));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(format!("read {rel}: {e}")),
+            }
+        }
+        let violations = unsafe_gate::added(&base_sources, &cand_sources);
+        if !violations.is_empty() {
+            let detail = violations
+                .iter()
+                .map(|v| format!("{}:{} {}", v.file, v.line, v.what))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Ok((
+                verdict::gate(
+                    Status::Fail,
+                    Reason::UnsafeAdded,
+                    format!(
+                        "unsafe code was added or changed relative to the baseline: {detail}. \
+                         The harness cannot check that unsafe code is sound — the tests and \
+                         the benchmark both pass on undefined behaviour — so it does not accept \
+                         it as an optimization. Reach the same speed in safe code (iterators, \
+                         chunks_exact, a length check hoisted out of the loop), or revert. Only \
+                         a human can lift this, with 'allow_unsafe: true' in the config before \
+                         'baseline'."
+                    ),
+                ),
+                None,
+            ));
+        }
     }
 
     // 4. Restore the frozen tests that live in their own files. Agent edits
